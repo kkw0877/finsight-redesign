@@ -1,0 +1,8 @@
+/* Elevation values copied verbatim from component boxShadow usage across the Figma source. */
+:root {
+  --shadow-xs: 0px 1px 2px 0px rgba(0,0,0,0.03);
+  --shadow-sm: 0px 1px 2px -1px rgba(23,23,23,0.1);
+  --shadow-md: 0px 0px 6px 0px rgba(0,0,0,0.08);
+  --shadow-lg: 0px 0px 12px 0px rgba(0,0,0,0.16);
+  --shadow-knob: 0px 3px 8px 0px rgba(0,0,0,0.15), 0px 3px 1px 0px rgba(0,0,0,0.06);
+}

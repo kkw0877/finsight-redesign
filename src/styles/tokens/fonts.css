@@ -1,0 +1,11 @@
+/* Real webfonts matching the Figma source: Pretendard JP (primary UI face) and Wanted Sans
+   Variable (display/wordmark face). Both are open-source (SIL OFL) and match the source file's
+   font usage exactly — no substitution needed. Loaded from the maintainers' official CDNs. */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-jp.css");
+@import url("https://cdn.jsdelivr.net/gh/wanteddev/wanted-sans@v1.0.1/packages/wanted-sans/fonts/webfonts/variable/split/WantedSansVariable.min.css");
+
+:root {
+  --font-sans: "Pretendard JP", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Wanted Sans Variable", "Pretendard JP", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}

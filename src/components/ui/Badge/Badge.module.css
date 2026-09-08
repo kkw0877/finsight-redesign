@@ -1,0 +1,48 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-pill);
+  font-weight: var(--text-label-2-weight);
+  font-size: var(--text-label-2-size);
+  line-height: var(--text-label-2-lh);
+  white-space: nowrap;
+}
+
+/* sizes */
+.sm {
+  height: 26px;
+  padding: 0 var(--space-5);
+}
+
+.md {
+  height: 32px;
+  padding: 0 var(--space-6);
+}
+
+/* solid variant: tinted background + matching foreground, per accent tone */
+.solid.blue { background: var(--blue-95); color: var(--accent-foreground-blue); }
+.solid.cyan { background: var(--accent-background-cyan); color: var(--accent-foreground-cyan); }
+.solid.lightBlue { background: var(--accent-background-light-blue); color: var(--accent-foreground-light-blue); }
+.solid.lime { background: var(--accent-background-lime); color: var(--accent-foreground-lime); }
+.solid.pink { background: var(--accent-background-pink); color: var(--accent-foreground-pink); }
+.solid.purple { background: var(--accent-background-purple); color: var(--accent-foreground-purple); }
+.solid.redOrange { background: var(--accent-background-red-orange); color: var(--accent-foreground-red-orange); }
+.solid.violet { background: var(--accent-background-violet); color: var(--accent-foreground-violet); }
+.solid.positive { background: var(--green-95); color: var(--status-positive); }
+.solid.negative { background: var(--red-95); color: var(--status-negative); }
+.solid.cautionary { background: var(--orange-95); color: var(--status-cautionary); }
+
+/* outlined variant: 1px border in the accent's foreground color, transparent fill */
+.outlined { background: transparent; border: 1px solid currentColor; }
+.outlined.blue { color: var(--accent-foreground-blue); }
+.outlined.cyan { color: var(--accent-foreground-cyan); }
+.outlined.lightBlue { color: var(--accent-foreground-light-blue); }
+.outlined.lime { color: var(--accent-foreground-lime); }
+.outlined.pink { color: var(--accent-foreground-pink); }
+.outlined.purple { color: var(--accent-foreground-purple); }
+.outlined.redOrange { color: var(--accent-foreground-red-orange); }
+.outlined.violet { color: var(--accent-foreground-violet); }
+.outlined.positive { color: var(--status-positive); }
+.outlined.negative { color: var(--status-negative); }
+.outlined.cautionary { color: var(--status-cautionary); }

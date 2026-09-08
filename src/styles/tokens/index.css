@@ -1,0 +1,8 @@
+/* Design token barrel — mirrors the export from Claude Design's
+   wanted-design-system project (Figma Variables + type/spacing/shadow scales).
+   Import this once, from app/globals.css. */
+@import "./fonts.css";
+@import "./fig-tokens.css";
+@import "./typography.css";
+@import "./spacing.css";
+@import "./shadow.css";

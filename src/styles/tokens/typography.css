@@ -1,0 +1,40 @@
+/* Wanted type scale — 7 tiers, 18 sub-styles total (source: /Typography page).
+   Exact size / line-height / letter-spacing values copied verbatim, not snapped to a scale. */
+:root {
+  --text-display-2-size: 40px; --text-display-2-lh: 52px; --text-display-2-ls: -0.0282em; --text-display-2-weight: 700;
+  --text-display-3-size: 36px; --text-display-3-lh: 48px; --text-display-3-ls: -0.027em; --text-display-3-weight: 700;
+  --text-title-1-size: 32px; --text-title-1-lh: 44px; --text-title-1-ls: -0.0253em; --text-title-1-weight: 700;
+  --text-title-2-size: 28px; --text-title-2-lh: 38px; --text-title-2-ls: -0.0236em; --text-title-2-weight: 700;
+  --text-title-3-size: 24px; --text-title-3-lh: 32px; --text-title-3-ls: -0.023em; --text-title-3-weight: 700;
+  --text-heading-1-size: 22px; --text-heading-1-lh: 30px; --text-heading-1-ls: -0.0194em; --text-heading-1-weight: 600;
+  --text-heading-2-size: 20px; --text-heading-2-lh: 28px; --text-heading-2-ls: -0.012em; --text-heading-2-weight: 600;
+  --text-headline-1-size: 18px; --text-headline-1-lh: 26px; --text-headline-1-ls: -0.002em; --text-headline-1-weight: 600;
+  --text-headline-2-size: 17px; --text-headline-2-lh: 24px; --text-headline-2-ls: 0em; --text-headline-2-weight: 600;
+  --text-body-1-normal-size: 16px; --text-body-1-normal-lh: 24px; --text-body-1-normal-ls: 0.0057em; --text-body-1-normal-weight: 500;
+  --text-body-1-reading-size: 16px; --text-body-1-reading-lh: 26px; --text-body-1-reading-ls: 0.0057em; --text-body-1-reading-weight: 500;
+  --text-body-2-normal-size: 15px; --text-body-2-normal-lh: 22px; --text-body-2-normal-ls: 0.0096em; --text-body-2-normal-weight: 500;
+  --text-body-2-reading-size: 15px; --text-body-2-reading-lh: 24px; --text-body-2-reading-ls: 0.0096em; --text-body-2-reading-weight: 500;
+  --text-label-1-normal-size: 14px; --text-label-1-normal-lh: 20px; --text-label-1-normal-ls: 0.0145em; --text-label-1-normal-weight: 600;
+  --text-label-1-reading-size: 14px; --text-label-1-reading-lh: 22px; --text-label-1-reading-ls: 0.0145em; --text-label-1-reading-weight: 600;
+  --text-label-2-size: 13px; --text-label-2-lh: 18px; --text-label-2-ls: 0.0194em; --text-label-2-weight: 600;
+  --text-caption-1-size: 12px; --text-caption-1-lh: 16px; --text-caption-1-ls: 0.0252em; --text-caption-1-weight: 500;
+  --text-caption-2-size: 11px; --text-caption-2-lh: 14px; --text-caption-2-ls: 0.0311em; --text-caption-2-weight: 500;
+}
+.text-display-2{font:var(--text-display-2-weight) var(--text-display-2-size)/var(--text-display-2-lh) var(--font-sans);letter-spacing:var(--text-display-2-ls)}
+.text-display-3{font:var(--text-display-3-weight) var(--text-display-3-size)/var(--text-display-3-lh) var(--font-sans);letter-spacing:var(--text-display-3-ls)}
+.text-title-1{font:var(--text-title-1-weight) var(--text-title-1-size)/var(--text-title-1-lh) var(--font-sans);letter-spacing:var(--text-title-1-ls)}
+.text-title-2{font:var(--text-title-2-weight) var(--text-title-2-size)/var(--text-title-2-lh) var(--font-sans);letter-spacing:var(--text-title-2-ls)}
+.text-title-3{font:var(--text-title-3-weight) var(--text-title-3-size)/var(--text-title-3-lh) var(--font-sans);letter-spacing:var(--text-title-3-ls)}
+.text-heading-1{font:var(--text-heading-1-weight) var(--text-heading-1-size)/var(--text-heading-1-lh) var(--font-sans);letter-spacing:var(--text-heading-1-ls)}
+.text-heading-2{font:var(--text-heading-2-weight) var(--text-heading-2-size)/var(--text-heading-2-lh) var(--font-sans);letter-spacing:var(--text-heading-2-ls)}
+.text-headline-1{font:var(--text-headline-1-weight) var(--text-headline-1-size)/var(--text-headline-1-lh) var(--font-sans);letter-spacing:var(--text-headline-1-ls)}
+.text-headline-2{font:var(--text-headline-2-weight) var(--text-headline-2-size)/var(--text-headline-2-lh) var(--font-sans);letter-spacing:var(--text-headline-2-ls)}
+.text-body-1-normal{font:var(--text-body-1-normal-weight) var(--text-body-1-normal-size)/var(--text-body-1-normal-lh) var(--font-sans);letter-spacing:var(--text-body-1-normal-ls)}
+.text-body-1-reading{font:var(--text-body-1-reading-weight) var(--text-body-1-reading-size)/var(--text-body-1-reading-lh) var(--font-sans);letter-spacing:var(--text-body-1-reading-ls)}
+.text-body-2-normal{font:var(--text-body-2-normal-weight) var(--text-body-2-normal-size)/var(--text-body-2-normal-lh) var(--font-sans);letter-spacing:var(--text-body-2-normal-ls)}
+.text-body-2-reading{font:var(--text-body-2-reading-weight) var(--text-body-2-reading-size)/var(--text-body-2-reading-lh) var(--font-sans);letter-spacing:var(--text-body-2-reading-ls)}
+.text-label-1-normal{font:var(--text-label-1-normal-weight) var(--text-label-1-normal-size)/var(--text-label-1-normal-lh) var(--font-sans);letter-spacing:var(--text-label-1-normal-ls)}
+.text-label-1-reading{font:var(--text-label-1-reading-weight) var(--text-label-1-reading-size)/var(--text-label-1-reading-lh) var(--font-sans);letter-spacing:var(--text-label-1-reading-ls)}
+.text-label-2{font:var(--text-label-2-weight) var(--text-label-2-size)/var(--text-label-2-lh) var(--font-sans);letter-spacing:var(--text-label-2-ls)}
+.text-caption-1{font:var(--text-caption-1-weight) var(--text-caption-1-size)/var(--text-caption-1-lh) var(--font-sans);letter-spacing:var(--text-caption-1-ls)}
+.text-caption-2{font:var(--text-caption-2-weight) var(--text-caption-2-size)/var(--text-caption-2-lh) var(--font-sans);letter-spacing:var(--text-caption-2-ls)}

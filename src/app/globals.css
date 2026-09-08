@@ -1,0 +1,26 @@
+@import "../styles/tokens/index.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--background-normal-alternative);
+  color: var(--label-normal);
+  font-family: var(--font-sans);
+}
+
+a {
+  color: var(--primary-normal);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--primary-strong);
+}

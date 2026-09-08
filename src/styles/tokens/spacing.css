@@ -1,0 +1,27 @@
+/* Spacing scale distilled from recurring gap/padding values across the Figma source
+   (component padding, card gaps, section rhythm). Radii come from the Frame/Modal
+   variable collections (fig-tokens.css --radius / --radius-2 / --radius-3). */
+:root {
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+  --space-10: 32px;
+  --space-11: 40px;
+  --space-12: 48px;
+  --space-13: 64px;
+  --space-14: 96px;
+  --space-15: 128px;
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius-pill: 999px;
+}

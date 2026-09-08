@@ -1,0 +1,76 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-weight: var(--text-label-1-normal-weight);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* sizes */
+.sm {
+  height: 36px;
+  padding: 0 var(--space-6);
+  font-size: var(--text-label-1-normal-size);
+  line-height: var(--text-label-1-normal-lh);
+}
+
+.md {
+  height: 44px;
+  padding: 0 var(--space-7);
+  font-size: var(--text-body-2-normal-size);
+  line-height: var(--text-body-2-normal-lh);
+}
+
+.lg {
+  height: 52px;
+  padding: 0 var(--space-8);
+  font-size: var(--text-body-1-normal-size);
+  line-height: var(--text-body-1-normal-lh);
+}
+
+/* color x variant */
+.primary.solid {
+  border: none;
+  background: var(--primary-normal);
+  color: var(--static-white);
+}
+.primary.solid:hover:not(:disabled) {
+  background: var(--primary-strong);
+}
+
+.primary.outlined {
+  border: 1px solid var(--primary-normal);
+  background: transparent;
+  color: var(--primary-normal);
+}
+.primary.outlined:hover:not(:disabled) {
+  background: var(--accent-background-light-blue);
+}
+
+.assistive.solid {
+  border: none;
+  background: var(--fill-normal);
+  color: var(--label-normal);
+}
+.assistive.solid:hover:not(:disabled) {
+  background: var(--fill-strong);
+}
+
+.assistive.outlined {
+  border: 1px solid var(--line-normal-normal);
+  background: var(--background-normal-normal);
+  color: var(--label-normal);
+}
+.assistive.outlined:hover:not(:disabled) {
+  background: var(--fill-alternative);
+}
