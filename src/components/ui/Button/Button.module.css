@@ -38,6 +38,19 @@
   line-height: var(--text-body-1-normal-lh);
 }
 
+/* below the mobile breakpoint, bump sm up to the 44px minimum touch target
+   (Apple/Google guidance) — md/lg already clear it */
+@media (max-width: 640px) {
+  .sm {
+    height: 44px;
+    padding: 0 var(--space-7);
+  }
+}
+
+.fullWidth {
+  width: 100%;
+}
+
 /* color x variant */
 .primary.solid {
   border: none;

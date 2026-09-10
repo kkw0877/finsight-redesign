@@ -10,6 +10,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   color?: ButtonColor;
   size?: ButtonSize;
+  fullWidth?: boolean;
 }
 
 export function Button({
@@ -17,10 +18,18 @@ export function Button({
   variant = "solid",
   color = "primary",
   size = "md",
+  fullWidth = false,
   className,
   ...rest
 }: ButtonProps) {
-  const classes = [styles.button, styles[size], styles[color], styles[variant], className]
+  const classes = [
+    styles.button,
+    styles[size],
+    styles[color],
+    styles[variant],
+    fullWidth && styles.fullWidth,
+    className,
+  ]
     .filter(Boolean)
     .join(" ");
 

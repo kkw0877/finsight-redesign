@@ -1,0 +1,6 @@
+/* Hand-picked responsive cutoff for mobile web support (not part of the Figma token
+   export). CSS media queries can't consume custom properties, so any `@media
+   (max-width: ...)` in component/page CSS must be kept in sync with this value. */
+:root {
+  --breakpoint-mobile: 640px;
+}
