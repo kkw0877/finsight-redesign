@@ -76,9 +76,11 @@ before relying on more icons.
   둔다(정리 주기만큼 실제 삭제가 지연될 수 있음, ADR-011) — 이 TTL을 우회하는 별도 영구 저장
   경로를 추가하지 않는다.
 - 컴포넌트는 `src/components/`, 타입은 `src/types/`, 외부 API 래퍼는 `src/services/`에 분리.
-- AI 분석 처리는 비동기(백그라운드 job + 클라이언트 폴링)로 구현한다. 동기 요청 안에서 거래
-  추출·AI 분석까지 끝내지 않는다(Vercel 함수 타임아웃 리스크, ADR-006 참고).
-- CRITICAL: service role 키로 RLS를 우회하는 코드(Edge Function, 웹훅 핸들러)는 RLS가 없다고
+- AI 분석 처리는 하나의 동기 API 요청 안에서 거래 추출 → 분석까지 끝내고 결과를 바로 반환한다.
+  Route Handler의 `maxDuration`을 넉넉하게(기준값 300초, 실측 후 재조정 가능) 설정한다
+  (ADR-017 참고). Edge Function이나 별도 job 폴링 인프라를 추가하지 않는다 — 실측 처리 시간이
+  타임아웃에 자주 걸리기 시작하면 그때 비동기 전환을 재검토한다.
+- CRITICAL: service role 키로 RLS를 우회하는 코드(분석 처리 라우트, 웹훅 핸들러)는 RLS가 없다고
   전제하고 모든 쿼리에 `user_id` 조건을 명시적으로 건다(ADR-014 참고 데이터 접근 통제 원칙).
 - CRITICAL: 내부 예외 메시지나 스택 트레이스를 사용자에게 그대로 노출하지 않는다 — 항상 이해
   가능한 메시지로 매핑해서 보여준다.
