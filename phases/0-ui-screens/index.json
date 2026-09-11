@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "landing-page",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-11T18:08:34+0900",
+      "summary": "Replaced src/app/page.tsx with the Server Component landing page (header, hero, 3-col feature cards, pricing/format strip, ADR-015 overseas-transfer notice + /privacy link) and added src/app/privacy/page.tsx as a minimal placeholder policy page; both responsive at the 640px breakpoint.",
+      "completed_at": "2026-09-11T18:20:00+0900"
     },
     {
       "step": 2,
