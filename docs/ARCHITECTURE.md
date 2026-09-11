@@ -39,6 +39,16 @@ Supabase/Claude/Polar 등 외부 서비스 호출은 반드시 `src/app/api/`의
 서비스 SDK를 직접 호출하지 않는다 — 인증 토큰/API 키 노출 방지와 F-RIRRKL의 "화면 진입 전·
 데이터 조회 전 인증 상태 확인" 요구사항을 서버 쪽에서 일관되게 강제하기 위함이다.
 
+**보안 규칙**
+- service role 키로 RLS를 우회하는 코드(Edge Function, 웹훅 핸들러)는 RLS가 없다고 전제하고,
+  모든 쿼리에 `user_id` 조건을 명시적으로 건다. RLS는 방어선 중 하나일 뿐이며, 우회 지점의
+  실수는 곧바로 크로스 유저 데이터 유출로 이어진다.
+- 업로드 파일은 비공개 Storage 버킷 + signed URL로만 접근한다(ADR-014). 클라이언트가 Storage
+  경로를 직접 구성해 접근하는 코드를 만들지 않는다.
+- 내부 예외 메시지·스택 트레이스를 사용자에게 그대로 노출하지 않는다. API 라우트는 항상 알려진
+  에러 케이스를 사용자 이해 가능한 메시지로 매핑해서 응답한다(예: DB 유니크 제약 위반 →
+  "이미 처리 중인 분석이 있습니다").
+
 ## 데이터 흐름
 
 ```
@@ -61,9 +71,16 @@ Supabase/Claude/Polar 등 외부 서비스 호출은 반드시 `src/app/api/`의
    → 완료 시 GET /api/analysis/latest로 최신 분석 결과(이력 없음, 최신 1건만)를 가져와 대시보드 갱신
 
 4. 파일 정리
-   Supabase pg_cron이 주기 실행 → file_expires_at 지난 analysis_jobs의 Storage 오브젝트/참조 삭제(ADR-011)
+   Supabase pg_cron이 주기 실행 → file_expires_at 지났고 status가 진행 중(pending/extracting/
+   analyzing)이 아닌 analysis_jobs의 Storage 오브젝트/참조만 삭제(ADR-011, 진행 중인 job과의
+   경합 방지)
 
-5. 결제
+5. 정체(stuck) job 재수거
+   Supabase pg_cron이 주기 실행 → updated_at 기준 일정 시간 이상 pending/extracting/analyzing에
+   머문 job을 failed로 전환 + error_message="처리 시간 초과"(ADR-016)
+   → ADR-013의 부분 유니크 인덱스가 풀려 사용자가 새 분석을 다시 시작할 수 있게 됨
+
+6. 결제
    무료 잔여 0회 → 결제 화면 → POST /api/subscription/checkout으로 Polar 결제 세션 생성
    → Polar 결제 진행 → POST /api/webhooks/polar 수신(서명 검증 + webhook_events로 idempotency, ADR-012)
    → 구독 상태를 Supabase에 활성화 → 대시보드에서 추가 분석(월 최대 4회) 가능
@@ -73,7 +90,10 @@ Supabase/Claude/Polar 등 외부 서비스 호출은 반드시 `src/app/api/`의
 
 사용자 계정 자체는 Supabase Auth의 `auth.users`를 그대로 쓰고 별도 `users` 테이블은 만들지
 않는다. 아래 5개 테이블만 추가한다. 모두 RLS로 `user_id = auth.uid()` 제한, 백그라운드 처리
-(Edge Function)와 웹훅 핸들러는 service role 키로 RLS를 우회해 쓴다.
+(Edge Function)와 웹훅 핸들러는 service role 키로 RLS를 우회해 쓴다 — 우회하는 쿼리는 반드시
+`user_id`를 직접 조건으로 걸어야 한다(위 "보안 규칙" 참고). 업로드 원본 파일은 별도 비공개
+Storage 버킷에 signed URL로만 접근하며(ADR-014), 추출·분석 결과(`analysis_results`)에는
+카드번호·계좌번호 등 결제수단 식별자를 포함하지 않는다(ADR-004).
 
 ```
 usage_monthly     (user_id, period_month, free_used_count, subscription_used_count, updated_at)
@@ -97,17 +117,20 @@ webhook_events    (id = Polar event id PK, type, received_at, processed_at)  -- 
 
 ## API 인터페이스 (`src/app/api/`)
 
-| 라우트 | 메서드 | 역할 | 근거 |
-|---|---|---|---|
-| `/api/upload` | POST | CSV/PDF 업로드, 형식/20MB 검증, Storage 저장, `analysis_jobs` row 생성(status=pending) | F-ILFWKT |
-| `/api/analysis/start` | POST | 잔여 횟수 확인 후 분석 시작(잔여 0이면 402) | F-PAUYQW, F-ILHNGA |
-| `/api/analysis/status` | GET | jobId로 진행 상태 폴링 | F-ANJCJR, ADR-006 |
-| `/api/analysis/latest` | GET | 최신 분석 결과 조회(대시보드 로드) | F-ANJCJR, ADR-007 |
-| `/api/usage` | GET | 이번 달 무료/구독 사용 현황 + 구독 상태 | F-PAOWJD, F-RPFVZX |
-| `/api/subscription/checkout` | POST | Polar 결제 세션 생성, 결제 URL 반환 | F-UXSBGF |
-| `/api/subscription/cancel` | POST | 구독 해지 요청(다음 주기부터 갱신 중단) | F-QVPIEG |
-| `/api/webhooks/polar` | POST | Polar 웹훅 수신 → 서명 검증 → idempotency → 구독 상태 갱신 | ADR-012 |
-| `/auth/callback` | GET | Supabase Auth 구글 OAuth 콜백 | F-IZGIPZ |
+| 라우트 | 메서드 | 인증 | 역할 | 근거 |
+|---|---|---|---|---|
+| `/api/upload` | POST | 세션(로그인) | CSV/PDF 업로드, 형식/20MB 검증, Storage 저장, `analysis_jobs` row 생성(status=pending) | F-ILFWKT |
+| `/api/analysis/start` | POST | 세션(로그인) | 잔여 횟수 확인 후 분석 시작(잔여 0이면 402) | F-PAUYQW, F-ILHNGA |
+| `/api/analysis/status` | GET | 세션(로그인) | jobId로 진행 상태 폴링 | F-ANJCJR, ADR-006 |
+| `/api/analysis/latest` | GET | 세션(로그인) | 최신 분석 결과 조회(대시보드 로드) | F-ANJCJR, ADR-007 |
+| `/api/usage` | GET | 세션(로그인) | 이번 달 무료/구독 사용 현황 + 구독 상태 | F-PAOWJD, F-RPFVZX |
+| `/api/subscription/checkout` | POST | 세션(로그인) | Polar 결제 세션 생성, 결제 URL 반환 | F-UXSBGF |
+| `/api/subscription/cancel` | POST | 세션(로그인) | 구독 해지 요청(다음 주기부터 갱신 중단) | F-QVPIEG |
+| `/api/webhooks/polar` | POST | **Polar 웹훅 서명**(세션 없음) | Polar 웹훅 수신 → 서명 검증 → idempotency → 구독 상태 갱신 | ADR-012 |
+| `/auth/callback` | GET | **없음**(OAuth 콜백 자체가 인증 절차) | Supabase Auth 구글 OAuth 콜백 | F-IZGIPZ |
+
+`/api/webhooks/polar`와 `/auth/callback`은 세션 인증 미들웨어 대상이 아니다 — 나중에 "모든
+API는 로그인 필요"로 일괄 미들웨어를 적용할 때 이 두 라우트를 명시적으로 예외 처리해야 한다.
 
 결제/분석 시작·성공·실패 같은 시도 단위 이벤트는 별도 DB 로그 테이블을 두지 않고 PostHog로
 기록한다(ADR-009/ADR-012). `subscriptions`/`analysis_jobs`는 항상 최신 상태만 담고, 시도별
