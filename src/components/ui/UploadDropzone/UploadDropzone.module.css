@@ -1,0 +1,7 @@
+.dropzone {
+  border: 2px dashed var(--line-normal-strong);
+  border-radius: var(--radius-xl);
+  background: var(--fill-alternative);
+  padding: 48px 32px;
+  text-align: center;
+}

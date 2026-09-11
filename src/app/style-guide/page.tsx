@@ -1,4 +1,16 @@
-import { Badge, Button, Chip, Icon, Spinner } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Chip,
+  FileRowCard,
+  GoogleButton,
+  Icon,
+  SectionCard,
+  Spinner,
+  UploadDropzone,
+  UsageBadge,
+  StatusIconCircle,
+} from "@/components/ui";
 import styles from "./page.module.css";
 
 const COLOR_SWATCHES: { label: string; varName: string }[] = [
@@ -124,6 +136,51 @@ export default function StyleGuidePage() {
         <div className={styles.row}>
           <Icon name="circle-check" size={28} style={{ color: "var(--status-positive)" }} />
           <Icon name="triangle-alert" size={28} style={{ color: "var(--status-negative)" }} />
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>SectionCard</h2>
+        <div className={styles.row}>
+          <SectionCard>Spending by category</SectionCard>
+          <SectionCard focused>Focused section</SectionCard>
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>StatusIconCircle</h2>
+        <div className={styles.row}>
+          <StatusIconCircle tone="positive" />
+          <StatusIconCircle tone="negative" />
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>UsageBadge</h2>
+        <div className={styles.row}>
+          <UsageBadge text="Free analyses 1/2 left" />
+          <UsageBadge text="Free analyses 0/2 left" warn />
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>UploadDropzone</h2>
+        <div className={styles.row}>
+          <UploadDropzone>Drag and drop your CSV/PDF here</UploadDropzone>
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>FileRowCard</h2>
+        <div className={styles.row}>
+          <FileRowCard fileName="2026-08-statement.csv" fileSize="1.2MB" verified />
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>GoogleButton</h2>
+        <div className={styles.row}>
+          <GoogleButton />
         </div>
       </section>
     </main>

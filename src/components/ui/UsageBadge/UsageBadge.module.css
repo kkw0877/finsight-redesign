@@ -1,0 +1,17 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: 6px var(--space-6);
+  background: var(--fill-normal);
+  color: var(--label-normal);
+  font-size: var(--text-label-2-size);
+  line-height: var(--text-label-2-lh);
+  font-weight: var(--text-label-2-weight);
+  white-space: nowrap;
+}
+
+.warn {
+  background: var(--red-95);
+  color: var(--status-negative);
+}

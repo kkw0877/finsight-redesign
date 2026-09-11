@@ -1,0 +1,35 @@
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: 14px var(--space-7);
+  border: 1px solid var(--line-normal-normal);
+  border-radius: var(--radius-md);
+  background: var(--background-normal-normal);
+}
+
+.iconBox {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  background: var(--fill-strong);
+  border-radius: 8px;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.fileName {
+  font-weight: 700;
+  color: var(--label-normal);
+  font-size: var(--text-body-2-normal-size);
+  line-height: var(--text-body-2-normal-lh);
+}
+
+.fileSize {
+  color: var(--label-assistive);
+  font-size: var(--text-caption-1-size);
+  line-height: var(--text-caption-1-lh);
+}

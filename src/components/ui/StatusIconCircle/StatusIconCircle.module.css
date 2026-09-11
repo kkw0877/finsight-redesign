@@ -1,0 +1,14 @@
+.circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.positive {
+  background: var(--green-95);
+}
+
+.negative {
+  background: var(--red-95);
+}
