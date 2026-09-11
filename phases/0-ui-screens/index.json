@@ -21,7 +21,10 @@
     {
       "step": 2,
       "name": "auth-screens",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-11T18:15:13+0900",
+      "summary": "Added src/app/login/page.tsx (Client Component: GoogleButton + loading overlay with Spinner, inline demo sign-in failure state, back link) and src/app/welcome/page.tsx (Server Component: StatusIconCircle success + CTA to /dashboard), both 400-440px centered.",
+      "completed_at": "2026-09-11T18:20:00+0900"
     },
     {
       "step": 3,
