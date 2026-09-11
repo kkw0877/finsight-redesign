@@ -1,0 +1,123 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  background: var(--background-normal-alternative);
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-7);
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-weight: 700;
+  color: var(--label-normal);
+}
+
+.description {
+  margin: 0;
+  color: var(--label-alternative);
+}
+
+.planWrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-7);
+}
+
+.planCard {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
+  text-align: left;
+}
+
+.planName {
+  font-weight: 700;
+  color: var(--label-normal);
+}
+
+.planPrice {
+  font-weight: 700;
+  color: var(--label-normal);
+}
+
+.planPriceUnit {
+  font-weight: 400;
+  font-size: var(--text-body-2-normal-size);
+  color: var(--label-alternative);
+}
+
+.benefitList {
+  margin: 0;
+  padding-left: var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  color: var(--label-alternative);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: var(--radius-lg);
+}
+
+.overlayText {
+  color: var(--label-normal);
+}
+
+.receiptCard {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  text-align: left;
+}
+
+.receiptRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--label-normal);
+}
+
+.secondaryLink {
+  color: var(--label-alternative);
+  text-decoration: none;
+}
+
+.secondaryLink:hover {
+  color: var(--primary-normal);
+}
+
+.demoLink {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--label-assistive);
+  cursor: pointer;
+}
+
+.demoLink:hover {
+  color: var(--label-alternative);
+}
