@@ -29,7 +29,10 @@
     {
       "step": 3,
       "name": "dashboard-screen",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-11T18:17:04+0900",
+      "summary": "Added src/app/dashboard/page.tsx (Client Component with local-state DashboardView machine: empty/file-selected/upload-error/extract-error/analyzing/analysis-error/result), using a real file input for CSV/PDF + 20MB validation, setTimeout-simulated synchronous analysis (ADR-017) that decrements freeRemaining (floor 0) and clears on unmount/retry, and a 740px 3-SectionCard result view (category bars, anomalies with Alert badges, recommendations, reference-info disclaimer) with mock data matching the spec exactly.",
+      "completed_at": "2026-09-11T18:21:27+0900"
     },
     {
       "step": 4,
