@@ -44,22 +44,93 @@ Supabase/Claude/Polar 등 외부 서비스 호출은 반드시 `src/app/api/`의
 ```
 1. 업로드
    사용자 파일 선택 (Client) → POST /api/upload → 형식/용량(20MB) 검증
-   → 유효 시 Supabase Storage에 임시 저장(TTL 24h, ADR-003)
+   → 유효 시 Supabase Storage에 임시 저장 + analysis_jobs row 생성
+     (status=pending, file_expires_at=now+24h, ADR-003)
 
-2. 추출 + 분석 (비동기, ADR-006)
-   분석 요청(Client) → 무료/구독 잔여 횟수 확인(F-ILHNGA/F-QVPIEG)
-   → 분석 job 생성(상태: 대기) → 백그라운드에서
-     Claude로 거래 내역 추출(ADR-004) → Claude로 소비 분석(ADR-005)
-   → 결과를 Supabase DB에 저장, job 상태를 완료/실패로 갱신
-   → 정상 완료 시에만 무료 횟수 차감
+2. 추출 + 분석 (비동기, ADR-006/ADR-010)
+   분석 시작 요청(Client) → POST /api/analysis/start
+   → 무료/구독 잔여 횟수 확인(F-ILHNGA/F-QVPIEG), 진행 중 job 없는지 확인(ADR-013)
+   → analysis_jobs row 갱신(status=pending)
+   → Supabase Database Webhook이 이 insert/update를 감지해 Edge Function 자동 호출
+   → Edge Function 안에서 Claude로 거래 내역 추출(ADR-004) → Claude로 소비 분석(ADR-005)
+   → analysis_results에 결과 upsert(user_id 기준, ADR-007), analysis_jobs 상태를 완료/실패로 갱신
+   → 정상 완료 시에만 무료/구독 사용 횟수 차감
 
 3. 결과 조회
    Client가 GET /api/analysis/status를 폴링 → 진행 중 상태 표시
-   → 완료 시 최신 분석 결과(ADR-007: 이력 없음, 최신 1건만)로 대시보드 갱신
+   → 완료 시 GET /api/analysis/latest로 최신 분석 결과(이력 없음, 최신 1건만)를 가져와 대시보드 갱신
 
-4. 결제
-   무료 잔여 0회 → 결제 화면 → Polar 결제 진행 → Polar 웹훅으로 결제 확인
+4. 파일 정리
+   Supabase pg_cron이 주기 실행 → file_expires_at 지난 analysis_jobs의 Storage 오브젝트/참조 삭제(ADR-011)
+
+5. 결제
+   무료 잔여 0회 → 결제 화면 → POST /api/subscription/checkout으로 Polar 결제 세션 생성
+   → Polar 결제 진행 → POST /api/webhooks/polar 수신(서명 검증 + webhook_events로 idempotency, ADR-012)
    → 구독 상태를 Supabase에 활성화 → 대시보드에서 추가 분석(월 최대 4회) 가능
+```
+
+## 데이터 모델 (Supabase Postgres)
+
+사용자 계정 자체는 Supabase Auth의 `auth.users`를 그대로 쓰고 별도 `users` 테이블은 만들지
+않는다. 아래 5개 테이블만 추가한다. 모두 RLS로 `user_id = auth.uid()` 제한, 백그라운드 처리
+(Edge Function)와 웹훅 핸들러는 service role 키로 RLS를 우회해 쓴다.
+
+```
+usage_monthly     (user_id, period_month, free_used_count, subscription_used_count, updated_at)
+  PK (user_id, period_month)                                            -- F-ILHNGA/F-QVPIEG
+
+subscriptions     (user_id UNIQUE, status, polar_subscription_id, polar_customer_id,
+                   current_period_end, auto_renew, updated_at)          -- F-QVPIEG
+
+analysis_jobs     (id, user_id, status, source_file_path, source_file_type,
+                   file_expires_at, error_message, created_at, updated_at)
+  부분 유니크 인덱스: user_id WHERE status IN ('pending','extracting','analyzing')  -- ADR-013
+  file_expires_at 기준 pg_cron 삭제 대상                                             -- ADR-011
+
+analysis_results  (user_id PK, job_id, summary jsonb, category_breakdown jsonb,
+                   anomalies jsonb, recommendations jsonb, generated_at)
+  user_id가 PK이므로 새 분석 완료 시 upsert로 이전 결과를 덮어씀                       -- ADR-007
+
+webhook_events    (id = Polar event id PK, type, received_at, processed_at)  -- ADR-012
+  결제 웹훅 idempotency 체크용
+```
+
+## API 인터페이스 (`src/app/api/`)
+
+| 라우트 | 메서드 | 역할 | 근거 |
+|---|---|---|---|
+| `/api/upload` | POST | CSV/PDF 업로드, 형식/20MB 검증, Storage 저장, `analysis_jobs` row 생성(status=pending) | F-ILFWKT |
+| `/api/analysis/start` | POST | 잔여 횟수 확인 후 분석 시작(잔여 0이면 402) | F-PAUYQW, F-ILHNGA |
+| `/api/analysis/status` | GET | jobId로 진행 상태 폴링 | F-ANJCJR, ADR-006 |
+| `/api/analysis/latest` | GET | 최신 분석 결과 조회(대시보드 로드) | F-ANJCJR, ADR-007 |
+| `/api/usage` | GET | 이번 달 무료/구독 사용 현황 + 구독 상태 | F-PAOWJD, F-RPFVZX |
+| `/api/subscription/checkout` | POST | Polar 결제 세션 생성, 결제 URL 반환 | F-UXSBGF |
+| `/api/subscription/cancel` | POST | 구독 해지 요청(다음 주기부터 갱신 중단) | F-QVPIEG |
+| `/api/webhooks/polar` | POST | Polar 웹훅 수신 → 서명 검증 → idempotency → 구독 상태 갱신 | ADR-012 |
+| `/auth/callback` | GET | Supabase Auth 구글 OAuth 콜백 | F-IZGIPZ |
+
+결제/분석 시작·성공·실패 같은 시도 단위 이벤트는 별도 DB 로그 테이블을 두지 않고 PostHog로
+기록한다(ADR-009/ADR-012). `subscriptions`/`analysis_jobs`는 항상 최신 상태만 담고, 시도별
+이력이 필요하면 PostHog에서 조회한다.
+
+## 도메인 타입
+
+설계 기준선만 여기 정리한다. 실제 `src/types/*.ts` 파일은 구현 착수 시 이 정의를 그대로
+옮겨 생성한다.
+
+```ts
+type AnalysisStatus = 'pending' | 'extracting' | 'analyzing' | 'completed' | 'failed'
+type Category = '식비' | '교통' | '카페/간식' | '쇼핑' | '문화/여가' | '의료/건강'
+  | '주거/관리비' | '통신비' | '교육' | '여행' | '구독/금융' | '기타'
+type SubscriptionStatus = 'none' | 'active' | 'cancel_scheduled' | 'inactive'
+
+interface AnalysisResult {
+  summary: { totalAmount: number; periodStart: string; periodEnd: string }
+  categoryBreakdown: { category: Category; amount: number; ratio: number; description: string }[]
+  anomalies: { relatedTransactions: string[]; reason: string; note: string }[]
+  recommendations: { text: string; basis: string }[]
+  generatedAt: string
+}
 ```
 
 ## 상태 관리

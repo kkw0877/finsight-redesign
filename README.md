@@ -23,6 +23,13 @@ Fonts (Pretendard JP / Wanted Sans) are loaded via `src/styles/tokens/fonts.css`
 See `CLAUDE.md` for where these tokens/components came from and what's intentionally
 not built yet.
 
+## Environment Variables
+
+Copy `.env.example` to `.env.local` and fill in the Supabase/Anthropic/Polar/PostHog keys
+before wiring up features that need them — see `docs/ADR.md` and `docs/ARCHITECTURE.md` for
+what each key is for. The app runs fine without them today since no backend integration
+exists yet.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

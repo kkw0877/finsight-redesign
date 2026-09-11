@@ -39,9 +39,12 @@ before relying on more icons.
   this once landing-page work starts.
 
 ## Not yet done
-- 실제 연동 착수(Supabase 프로젝트/스키마 생성, 구글 OAuth 앱 등록, Polar 상품 설정 등)와
-  그 위의 기능 구현(로그인/업로드/분석/결제 화면). 정책·기술 스택 결정은
-  [docs/ADR.md](./docs/ADR.md)에 확정되어 있으니 그것을 근거로 구현한다.
+- 실제 연동 착수(Supabase 프로젝트 생성 및 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)의
+  "데이터 모델" 절 기준 마이그레이션 작성, 구글 OAuth 앱 등록, Polar 상품/웹훅 URL 설정 등)와
+  그 위의 기능 구현(로그인/업로드/분석/결제 화면, `src/app/api/`의 API 라우트,
+  `src/types/*.ts` 도메인 타입). 정책·기술 스택·DB 스키마·API 계약 설계는
+  [docs/ADR.md](./docs/ADR.md)와 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)에 확정되어
+  있으니 그것을 근거로 구현한다.
 - 계정 삭제(탈퇴) 기능은 MVP 범위 밖으로 결정했지만, 분석 결과는 계정 삭제 전까지 보관하기로
   했다 — 삭제 기능이 없으면 사실상 무기한 보관이 되는 트레이드오프가 있다
   ([docs/ADR.md](./docs/ADR.md)의 ADR-007 참고). MVP 이후 가장 먼저 재검토할 것.
@@ -66,8 +69,9 @@ before relying on more icons.
 - CRITICAL: Supabase/Claude/Polar 등 외부 서비스 호출은 `src/app/api/` 라우트 핸들러(또는
   그 안에서 호출하는 `src/services/`의 래퍼)에서만 처리한다. 클라이언트 컴포넌트에서 외부
   서비스 SDK를 직접 호출하지 않는다.
-- CRITICAL: 업로드 원본 파일(CSV/PDF)은 24시간 후 자동 삭제되는 임시 저장소에만 둔다 — 이
-  TTL을 우회하는 별도 영구 저장 경로를 추가하지 않는다.
+- CRITICAL: 업로드 원본 파일(CSV/PDF)은 24시간 TTL로 pg_cron이 정리하는 임시 저장소에만
+  둔다(정리 주기만큼 실제 삭제가 지연될 수 있음, ADR-011) — 이 TTL을 우회하는 별도 영구 저장
+  경로를 추가하지 않는다.
 - 컴포넌트는 `src/components/`, 타입은 `src/types/`, 외부 API 래퍼는 `src/services/`에 분리.
 - AI 분석 처리는 비동기(백그라운드 job + 클라이언트 폴링)로 구현한다. 동기 요청 안에서 거래
   추출·AI 분석까지 끝내지 않는다(Vercel 함수 타임아웃 리스크, ADR-006 참고).
