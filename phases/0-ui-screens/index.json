@@ -7,7 +7,8 @@
       "name": "ui-primitives",
       "status": "completed",
       "started_at": "2026-09-11T18:04:52+0900",
-      "summary": "Added SectionCard, StatusIconCircle, UsageBadge, UploadDropzone, FileRowCard, GoogleButton (src/components/ui/<Name>/) with tests, exported from src/components/ui/index.ts, and demoed in src/app/style-guide/page.tsx."
+      "summary": "Added SectionCard, StatusIconCircle, UsageBadge, UploadDropzone, FileRowCard, GoogleButton (src/components/ui/<Name>/) with tests, exported from src/components/ui/index.ts, and demoed in src/app/style-guide/page.tsx.",
+      "completed_at": "2026-09-11T18:08:34+0900"
     },
     {
       "step": 1,
