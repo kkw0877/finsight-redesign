@@ -32,7 +32,7 @@
       "status": "completed",
       "started_at": "2026-09-13T18:22:26+0900",
       "summary": "Replaced dashboard/page.tsx mock constants/setTimeout with real fetch calls: mount-time GET /api/usage + GET /api/analysis/latest (404 falls back to empty view), handleStartAnalysis now does POST /api/upload → POST /api/analysis/start (200 renders AnalysisResult + refetches usage, 402 routes to /billing, 409/other shows analysis-error with server message), result view renders AnalysisResult's Korean category/ratio/description/relatedTransactions/reason/note/text/basis fields; kept both demo error-preview buttons; added page.test.tsx covering the upload→analysis success render and the 402→/billing redirect. npm run build/lint/test all pass.",
-      "completed_at": "2026-09-13T18:30:00+0900"
+      "completed_at": "2026-09-13T18:28:50+0900"
     },
     {
       "step": 4,
