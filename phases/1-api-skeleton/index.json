@@ -7,7 +7,8 @@
       "name": "types-fixtures",
       "status": "completed",
       "started_at": "2026-09-13T18:13:54+0900",
-      "summary": "Added src/types/{analysis,usage,api}.ts (AnalysisResult/Category/UsageStatus/SubscriptionStatus/route request-response types per ARCHITECTURE.md) and src/lib/fixtures/{analysisFixture,usageFixture}.ts (MOCK_ANALYSIS_RESULT + getLatestResult/setLatestResult/isProcessing/startProcessing/finishProcessing; getUsageStatus/hasRemainingAnalysis/consumeOneAnalysis/activateSubscription/cancelSubscription) with colocated *.test.ts; npm run build/lint/test all pass."
+      "summary": "Added src/types/{analysis,usage,api}.ts (AnalysisResult/Category/UsageStatus/SubscriptionStatus/route request-response types per ARCHITECTURE.md) and src/lib/fixtures/{analysisFixture,usageFixture}.ts (MOCK_ANALYSIS_RESULT + getLatestResult/setLatestResult/isProcessing/startProcessing/finishProcessing; getUsageStatus/hasRemainingAnalysis/consumeOneAnalysis/activateSubscription/cancelSubscription) with colocated *.test.ts; npm run build/lint/test all pass.",
+      "completed_at": "2026-09-13T18:16:21+0900"
     },
     {
       "step": 1,
