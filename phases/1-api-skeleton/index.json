@@ -24,7 +24,7 @@
       "status": "completed",
       "started_at": "2026-09-13T18:20:54+0900",
       "summary": "Added POST /api/subscription/checkout (mock-activates subscription immediately in lieu of the Polar webhook flow, per this step's spec; simulateFailure body flag → 402 without state change, otherwise 200 + {subscriptionStatus:'active', currentPeriodEnd, billedAt}) and POST /api/subscription/cancel (400 if not active, else 200 + {subscriptionStatus:'cancel_scheduled', currentPeriodEnd} reusing the existing period end); colocated route.test.ts per route. npm run build/lint/test all pass.",
-      "completed_at": "2026-09-13T18:23:00+0900"
+      "completed_at": "2026-09-13T18:22:26+0900"
     },
     {
       "step": 3,
