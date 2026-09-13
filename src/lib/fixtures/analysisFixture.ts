@@ -87,3 +87,8 @@ export function startProcessing(): void {
 export function finishProcessing(): void {
   processing = false;
 }
+
+export function __resetForTest(): void {
+  latestResult = null;
+  processing = false;
+}

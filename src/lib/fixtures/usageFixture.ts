@@ -60,3 +60,10 @@ export function cancelSubscription(periodEnd: string): void {
   subscriptionStatus = "cancel_scheduled";
   currentPeriodEnd = periodEnd;
 }
+
+export function __resetForTest(): void {
+  freeUsedCount = 0;
+  subscriptionUsedCount = 0;
+  subscriptionStatus = "none";
+  currentPeriodEnd = null;
+}
