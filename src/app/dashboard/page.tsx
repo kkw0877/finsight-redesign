@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -14,6 +14,8 @@ import {
   UploadDropzone,
   UsageBadge,
 } from "@/components/ui";
+import type { AnalysisResult } from "@/types/analysis";
+import type { UsageStatus } from "@/types/usage";
 import styles from "./page.module.css";
 
 type DashboardView =
@@ -25,22 +27,12 @@ type DashboardView =
   | "analysis-error"
   | "result";
 
-interface SelectedFile {
-  name: string;
-  size: string;
-}
-
-const FREE_LIMIT = 2;
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
-const CATEGORIES = [
-  { name: "Food & Cafe", amount: 612400, pct: 33 },
-  { name: "Shopping", amount: 398200, pct: 22 },
-  { name: "Other", amount: 364800, pct: 19 },
-  { name: "Culture & Leisure", amount: 231000, pct: 13 },
-  { name: "Transportation", amount: 156300, pct: 8 },
-  { name: "Subscriptions", amount: 84900, pct: 5 },
-];
+const DEFAULT_UPLOAD_ERROR_MESSAGE =
+  "Please upload a CSV or PDF card statement under 20MB.";
+const DEFAULT_ANALYSIS_ERROR_MESSAGE =
+  "Something went wrong while analyzing your statement. This didn't use up one of your free analyses — please try again.";
 
 const CATEGORY_COLORS = [
   "var(--blue-50)",
@@ -49,36 +41,6 @@ const CATEGORY_COLORS = [
   "var(--orange-50)",
   "var(--cyan-50)",
   "var(--pink-50)",
-];
-
-const ANOMALIES = [
-  {
-    title: "3 overlapping subscription payments detected",
-    desc: "Netflix, Watcha, and Disney+ charges are running concurrently. You're spending ₩84,900/month on streaming subscriptions alone.",
-  },
-  {
-    title: "Online shopping spend up 47% from last month",
-    desc: "Of the ₩398,200 spent on shopping in August, a ₩79,000 charge on 8/14 and a ₩132,000 charge on 8/22 drove most of the increase.",
-  },
-  {
-    title: "3 late-night delivery charges found",
-    desc: "Delivery app charges between 1–3 AM occurred three times: 8/3, 8/11, and 8/19. Check your late-night snacking spend.",
-  },
-];
-
-const RECOMMENDATIONS = [
-  {
-    title: "Cancel just one duplicate subscription to save up to ₩17,000/month",
-    desc: "Watcha and Disney+ content overlaps. Consider keeping just one.",
-  },
-  {
-    title: "Try setting a ₩300,000 monthly shopping budget",
-    desc: "Shopping spend was 47% higher than usual this month. Consider setting an alert before your next purchase.",
-  },
-  {
-    title: "Save on food by grocery shopping instead of delivery",
-    desc: "Swapping those 3 late-night deliveries for home cooking could save about ₩60,000/month.",
-  },
 ];
 
 function formatWon(amount: number): string {
@@ -94,25 +56,61 @@ function formatFileSize(bytes: number): string {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [freeRemaining, setFreeRemaining] = useState(FREE_LIMIT);
   const [view, setView] = useState<DashboardView>("empty");
-  const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
-  const analysisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [usage, setUsage] = useState<UsageStatus | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [uploadErrorMessage, setUploadErrorMessage] = useState(DEFAULT_UPLOAD_ERROR_MESSAGE);
+  const [analysisErrorMessage, setAnalysisErrorMessage] = useState(
+    DEFAULT_ANALYSIS_ERROR_MESSAGE,
+  );
 
-  // ADR-017: analysis runs synchronously server-side (no polling). This timeout
-  // simulates that single request/response round trip since there is no backend yet.
+  async function refreshUsage() {
+    try {
+      const response = await fetch("/api/usage");
+      if (response.ok) setUsage(await response.json());
+    } catch {
+      // Usage badge just keeps showing the last known value.
+    }
+  }
+
   useEffect(() => {
-    if (view !== "analyzing") return;
+    let active = true;
 
-    analysisTimeoutRef.current = setTimeout(() => {
-      setFreeRemaining((prev) => Math.max(0, prev - 1));
-      setView("result");
-    }, 2200);
+    fetch("/api/usage")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: UsageStatus | null) => {
+        if (active && data) setUsage(data);
+      })
+      .catch(() => {});
+
+    fetch("/api/analysis/latest")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: AnalysisResult | null) => {
+        if (active && data) {
+          setAnalysisResult(data);
+          setView("result");
+        }
+      })
+      .catch(() => {});
 
     return () => {
-      if (analysisTimeoutRef.current) clearTimeout(analysisTimeoutRef.current);
+      active = false;
     };
-  }, [view]);
+  }, []);
+
+  const usageLoaded = usage !== null;
+  const freeRemaining = usage?.freeRemaining ?? 0;
+  const freeLimit = usage?.freeLimit ?? 2;
+  const subscriptionRemaining = usage?.subscriptionRemaining ?? 0;
+  const hasNoRemainingAnalyses =
+    usageLoaded && freeRemaining <= 0 && subscriptionRemaining <= 0;
+
+  const usageBadgeText = !usageLoaded
+    ? "Loading usage…"
+    : hasNoRemainingAnalyses
+      ? "You've used all your free analyses this month."
+      : `Free analyses ${freeRemaining}/${freeLimit} left`;
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -122,20 +120,69 @@ export default function DashboardPage() {
     const hasValidExtension = /\.(csv|pdf)$/i.test(file.name);
     if (!hasValidExtension || file.size > MAX_FILE_SIZE) {
       setSelectedFile(null);
+      setUploadErrorMessage(DEFAULT_UPLOAD_ERROR_MESSAGE);
       setView("upload-error");
       return;
     }
 
-    setSelectedFile({ name: file.name, size: formatFileSize(file.size) });
+    setSelectedFile(file);
     setView("file-selected");
   }
 
-  function handleStartAnalysis() {
-    if (freeRemaining <= 0) {
+  async function handleStartAnalysis() {
+    if (!selectedFile) return;
+
+    if (hasNoRemainingAnalyses) {
       router.push("/billing");
       return;
     }
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    let uploadResponse: Response;
+    try {
+      uploadResponse = await fetch("/api/upload", { method: "POST", body: formData });
+    } catch {
+      setAnalysisErrorMessage(DEFAULT_ANALYSIS_ERROR_MESSAGE);
+      setView("analysis-error");
+      return;
+    }
+
+    if (uploadResponse.status !== 200) {
+      const body = await uploadResponse.json().catch(() => null);
+      setUploadErrorMessage(body?.error ?? DEFAULT_UPLOAD_ERROR_MESSAGE);
+      setView("upload-error");
+      return;
+    }
+
     setView("analyzing");
+
+    let analysisResponse: Response;
+    try {
+      analysisResponse = await fetch("/api/analysis/start", { method: "POST" });
+    } catch {
+      setAnalysisErrorMessage(DEFAULT_ANALYSIS_ERROR_MESSAGE);
+      setView("analysis-error");
+      return;
+    }
+
+    if (analysisResponse.status === 200) {
+      const result: AnalysisResult = await analysisResponse.json();
+      setAnalysisResult(result);
+      setView("result");
+      refreshUsage();
+      return;
+    }
+
+    if (analysisResponse.status === 402) {
+      router.push("/billing");
+      return;
+    }
+
+    const body = await analysisResponse.json().catch(() => null);
+    setAnalysisErrorMessage(body?.error ?? DEFAULT_ANALYSIS_ERROR_MESSAGE);
+    setView("analysis-error");
   }
 
   function handleChooseDifferentFile() {
@@ -148,14 +195,7 @@ export default function DashboardPage() {
       <header className={styles.header}>
         <span className={styles.wordmark}>Finsight</span>
         <div className={styles.headerRight}>
-          <UsageBadge
-            text={
-              freeRemaining === 0
-                ? "You've used all your free analyses this month."
-                : `Free analyses ${freeRemaining}/2 left`
-            }
-            warn={freeRemaining === 0}
-          />
+          <UsageBadge text={usageBadgeText} warn={hasNoRemainingAnalyses} />
           <div className={styles.avatar}>A</div>
           {/* TODO: replace with real Supabase Auth session invalidation */}
           <Link href="/" className={`${styles.logoutLink} text-label-1-normal`}>
@@ -167,7 +207,7 @@ export default function DashboardPage() {
       <main className={view === "result" ? styles.resultMain : styles.main}>
         {view === "empty" && (
           <>
-            {freeRemaining === 0 && (
+            {hasNoRemainingAnalyses && (
               <div className={styles.limitBanner}>
                 <p className={`${styles.limitBannerText} text-body-2-normal`}>
                   You&apos;ve used all your free analyses this month.
@@ -222,7 +262,7 @@ export default function DashboardPage() {
           <div className={styles.fileSelectedWrap}>
             <FileRowCard
               fileName={selectedFile.name}
-              fileSize={selectedFile.size}
+              fileSize={formatFileSize(selectedFile.size)}
               verified
             />
             <Button
@@ -250,7 +290,7 @@ export default function DashboardPage() {
               We couldn&apos;t process that file
             </h1>
             <p className={`${styles.statusDescription} text-body-2-normal`}>
-              Please upload a CSV or PDF card statement under 20MB.
+              {uploadErrorMessage}
             </p>
             <Button
               label="Upload again"
@@ -297,7 +337,10 @@ export default function DashboardPage() {
             <button
               type="button"
               className={`${styles.demoLink} text-caption-1`}
-              onClick={() => setView("analysis-error")}
+              onClick={() => {
+                setAnalysisErrorMessage(DEFAULT_ANALYSIS_ERROR_MESSAGE);
+                setView("analysis-error");
+              }}
             >
               Demo: preview analysis failure
             </button>
@@ -309,28 +352,28 @@ export default function DashboardPage() {
             <StatusIconCircle tone="negative" />
             <h1 className={`${styles.statusTitle} text-heading-2`}>Analysis failed</h1>
             <p className={`${styles.statusDescription} text-body-2-normal`}>
-              Something went wrong while analyzing your statement. This didn&apos;t use
-              up one of your free analyses — please try again.
+              {analysisErrorMessage}
             </p>
             <Button
               label="Retry analysis"
               variant="solid"
               color="primary"
               size="lg"
-              onClick={() => setView("analyzing")}
+              onClick={handleStartAnalysis}
             />
           </div>
         )}
 
-        {view === "result" && (
+        {view === "result" && analysisResult && (
           <>
             <div className={styles.resultHeader}>
               <div>
                 <h1 className={`${styles.resultTitle} text-heading-2`}>
-                  August Card Statement Analysis
+                  {analysisResult.summary.periodStart} – {analysisResult.summary.periodEnd}{" "}
+                  Card Statement Analysis
                 </h1>
                 <p className={`${styles.resultSubtitle} text-body-2-normal`}>
-                  Total spend ₩1,847,600 · 42 transactions · just analyzed
+                  Total spend {formatWon(analysisResult.summary.totalAmount)}
                 </p>
               </div>
               <Button
@@ -347,23 +390,26 @@ export default function DashboardPage() {
                 Spending by category
               </h2>
               <div className={styles.categoryList}>
-                {CATEGORIES.map((category, index) => (
-                  <div key={category.name} className={styles.categoryRow}>
+                {analysisResult.categoryBreakdown.map((category, index) => (
+                  <div key={category.category} className={styles.categoryRow}>
                     <div className={styles.categoryLabelRow}>
-                      <span className="text-body-2-normal">{category.name}</span>
+                      <span className="text-body-2-normal">{category.category}</span>
                       <span className="text-body-2-normal">
-                        {formatWon(category.amount)} · {category.pct}%
+                        {formatWon(category.amount)} · {Math.round(category.ratio * 100)}%
                       </span>
                     </div>
                     <div className={styles.categoryBarTrack}>
                       <div
                         className={styles.categoryBarFill}
                         style={{
-                          width: `${category.pct}%`,
+                          width: `${Math.round(category.ratio * 100)}%`,
                           background: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
                         }}
                       />
                     </div>
+                    <p className={`${styles.insightDescription} text-body-2-normal`}>
+                      {category.description}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -374,16 +420,16 @@ export default function DashboardPage() {
                 Unusual spending
               </h2>
               <div className={styles.insightList}>
-                {ANOMALIES.map((anomaly) => (
-                  <div key={anomaly.title} className={styles.insightItem}>
+                {analysisResult.anomalies.map((anomaly, index) => (
+                  <div key={index} className={styles.insightItem}>
                     <div className={styles.insightHeader}>
                       <span className={`${styles.insightTitle} text-body-1-normal`}>
-                        {anomaly.title}
+                        {anomaly.reason}
                       </span>
                       <Badge text="Alert" tone="negative" size="sm" />
                     </div>
                     <p className={`${styles.insightDescription} text-body-2-normal`}>
-                      {anomaly.desc}
+                      {anomaly.note} ({anomaly.relatedTransactions.join(", ")})
                     </p>
                   </div>
                 ))}
@@ -395,13 +441,13 @@ export default function DashboardPage() {
                 Savings recommendations
               </h2>
               <div className={styles.insightList}>
-                {RECOMMENDATIONS.map((recommendation) => (
-                  <div key={recommendation.title} className={styles.insightItem}>
+                {analysisResult.recommendations.map((recommendation, index) => (
+                  <div key={index} className={styles.insightItem}>
                     <span className={`${styles.insightTitle} text-body-1-normal`}>
-                      {recommendation.title}
+                      {recommendation.text}
                     </span>
                     <p className={`${styles.insightDescription} text-body-2-normal`}>
-                      {recommendation.desc}
+                      {recommendation.basis}
                     </p>
                   </div>
                 ))}
