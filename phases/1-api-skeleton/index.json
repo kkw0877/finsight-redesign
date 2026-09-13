@@ -16,7 +16,7 @@
       "status": "completed",
       "started_at": "2026-09-13T18:16:21+0900",
       "summary": "Added mock route handlers: POST /api/upload (400 invalid extension/>20MB, 200 + {jobId, fileName}), POST /api/analysis/start (maxDuration=300, 402 no remaining analyses, 409 already processing, 200 + AnalysisResult with usage decrement only on success via try/finally), GET /api/analysis/latest (404 no result, 200 + AnalysisResult), GET /api/usage (200 + UsageStatus); added __resetForTest() to analysisFixture/usageFixture for test isolation; colocated route.test.ts per route. npm run build/lint/test all pass.",
-      "completed_at": "2026-09-13T18:21:00+0900"
+      "completed_at": "2026-09-13T18:20:54+0900"
     },
     {
       "step": 2,
