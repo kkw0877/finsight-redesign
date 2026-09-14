@@ -1,0 +1,48 @@
+{
+  "project": "Finsight",
+  "phase": "1-api-skeleton",
+  "steps": [
+    {
+      "step": 0,
+      "name": "types-fixtures",
+      "status": "completed",
+      "started_at": "2026-09-13T18:13:54+0900",
+      "summary": "Added src/types/{analysis,usage,api}.ts (AnalysisResult/Category/UsageStatus/SubscriptionStatus/route request-response types per ARCHITECTURE.md) and src/lib/fixtures/{analysisFixture,usageFixture}.ts (MOCK_ANALYSIS_RESULT + getLatestResult/setLatestResult/isProcessing/startProcessing/finishProcessing; getUsageStatus/hasRemainingAnalysis/consumeOneAnalysis/activateSubscription/cancelSubscription) with colocated *.test.ts; npm run build/lint/test all pass.",
+      "completed_at": "2026-09-13T18:16:21+0900"
+    },
+    {
+      "step": 1,
+      "name": "analysis-routes",
+      "status": "completed",
+      "started_at": "2026-09-13T18:16:21+0900",
+      "summary": "Added mock route handlers: POST /api/upload (400 invalid extension/>20MB, 200 + {jobId, fileName}), POST /api/analysis/start (maxDuration=300, 402 no remaining analyses, 409 already processing, 200 + AnalysisResult with usage decrement only on success via try/finally), GET /api/analysis/latest (404 no result, 200 + AnalysisResult), GET /api/usage (200 + UsageStatus); added __resetForTest() to analysisFixture/usageFixture for test isolation; colocated route.test.ts per route. npm run build/lint/test all pass.",
+      "completed_at": "2026-09-13T18:20:54+0900"
+    },
+    {
+      "step": 2,
+      "name": "subscription-routes",
+      "status": "completed",
+      "started_at": "2026-09-13T18:20:54+0900",
+      "summary": "Added POST /api/subscription/checkout (mock-activates subscription immediately in lieu of the Polar webhook flow, per this step's spec; simulateFailure body flag → 402 without state change, otherwise 200 + {subscriptionStatus:'active', currentPeriodEnd, billedAt}) and POST /api/subscription/cancel (400 if not active, else 200 + {subscriptionStatus:'cancel_scheduled', currentPeriodEnd} reusing the existing period end); colocated route.test.ts per route. npm run build/lint/test all pass.",
+      "completed_at": "2026-09-13T18:22:26+0900"
+    },
+    {
+      "step": 3,
+      "name": "dashboard-integration",
+      "status": "completed",
+      "started_at": "2026-09-13T18:22:26+0900",
+      "summary": "Replaced dashboard/page.tsx mock constants/setTimeout with real fetch calls: mount-time GET /api/usage + GET /api/analysis/latest (404 falls back to empty view), handleStartAnalysis now does POST /api/upload → POST /api/analysis/start (200 renders AnalysisResult + refetches usage, 402 routes to /billing, 409/other shows analysis-error with server message), result view renders AnalysisResult's Korean category/ratio/description/relatedTransactions/reason/note/text/basis fields; kept both demo error-preview buttons; added page.test.tsx covering the upload→analysis success render and the 402→/billing redirect. npm run build/lint/test all pass.",
+      "completed_at": "2026-09-13T18:28:50+0900"
+    },
+    {
+      "step": 4,
+      "name": "billing-integration",
+      "status": "completed",
+      "started_at": "2026-09-13T18:28:50+0900",
+      "summary": "Replaced billing/page.tsx setTimeout simulation with real fetch: Pay button and preview-failure button both POST /api/subscription/checkout ({} vs {simulateFailure:true}), success view renders server's billedAt/currentPeriodEnd (no client-side date math), error view shows the server's {error} message; removed payTimeoutRef/cleanup; added page.test.tsx covering success date rendering and the failure-message path. npm run build/lint/test all pass.",
+      "completed_at": "2026-09-13T18:30:32+0900"
+    }
+  ],
+  "created_at": "2026-09-13T18:13:54+0900",
+  "completed_at": "2026-09-13T18:30:32+0900"
+}

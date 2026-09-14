@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Button, SectionCard, Spinner, StatusIconCircle } from "@/components/ui";
 import styles from "./page.module.css";
+import type { CheckoutSuccessResponse } from "@/types/api";
 
 type BillingView = "plan" | "paying" | "success" | "error";
 
@@ -13,36 +14,50 @@ const PLAN_BENEFITS = [
   "Cancel anytime",
 ];
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+const GENERIC_ERROR_MESSAGE = "결제 처리 중 문제가 발생했습니다. 다시 시도해주세요";
+
+function formatDate(isoDate: string): string {
+  return new Date(isoDate).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }
 
 export default function BillingPage() {
   const [view, setView] = useState<BillingView>("plan");
-  const payTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [checkoutResult, setCheckoutResult] = useState<CheckoutSuccessResponse | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() => {
-    return () => {
-      if (payTimeoutRef.current) clearTimeout(payTimeoutRef.current);
-    };
-  }, []);
+  async function submitCheckout(simulateFailure: boolean) {
+    setView("paying");
+    try {
+      const response = await fetch("/api/subscription/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ simulateFailure }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setErrorMessage(data.error ?? GENERIC_ERROR_MESSAGE);
+        setView("error");
+        return;
+      }
+      setCheckoutResult(data as CheckoutSuccessResponse);
+      setView("success");
+    } catch {
+      setErrorMessage(GENERIC_ERROR_MESSAGE);
+      setView("error");
+    }
+  }
 
   function handlePay() {
-    setView("paying");
-    payTimeoutRef.current = setTimeout(() => {
-      setView("success");
-    }, 900);
+    void submitCheckout(false);
   }
 
-  // TODO: replace with a real Polar checkout session (F-UXSBGF); this only previews the UI state.
   function handlePreviewFailure() {
-    if (payTimeoutRef.current) clearTimeout(payTimeoutRef.current);
-    setView("error");
+    void submitCheckout(true);
   }
-
-  const today = new Date();
-  const nextBillingDate = new Date(today);
-  nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
 
   return (
     <main className={styles.page}>
@@ -94,7 +109,7 @@ export default function BillingPage() {
           </div>
         )}
 
-        {view === "success" && (
+        {view === "success" && checkoutResult && (
           <>
             <StatusIconCircle tone="positive" />
             <h1 className={`${styles.title} text-heading-2`}>Your subscription is active!</h1>
@@ -109,11 +124,13 @@ export default function BillingPage() {
               </div>
               <div className={styles.receiptRow}>
                 <span className="text-body-2-normal">Billed on</span>
-                <span className="text-body-2-normal">{formatDate(today)}</span>
+                <span className="text-body-2-normal">{formatDate(checkoutResult.billedAt)}</span>
               </div>
               <div className={styles.receiptRow}>
                 <span className="text-body-2-normal">Next billing date</span>
-                <span className="text-body-2-normal">{formatDate(nextBillingDate)}</span>
+                <span className="text-body-2-normal">
+                  {formatDate(checkoutResult.currentPeriodEnd)}
+                </span>
               </div>
             </SectionCard>
             <Link href="/dashboard">
@@ -126,10 +143,7 @@ export default function BillingPage() {
           <>
             <StatusIconCircle tone="negative" />
             <h1 className={`${styles.title} text-heading-2`}>Payment failed</h1>
-            <p className={`${styles.description} text-body-2-normal`}>
-              Check your card details and try again. Your subscription status hasn&apos;t
-              changed.
-            </p>
+            <p className={`${styles.description} text-body-2-normal`}>{errorMessage}</p>
             <Button
               label="Retry payment"
               variant="solid"
