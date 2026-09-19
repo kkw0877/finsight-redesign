@@ -12,7 +12,8 @@
     },
     {
       "dir": "2-real-integrations",
-      "status": "pending"
+      "status": "error",
+      "failed_at": "2026-09-19T16:39:37+0900"
     }
   ]
 }
