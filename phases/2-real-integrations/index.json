@@ -56,7 +56,7 @@
       "status": "completed",
       "started_at": "2026-09-19T22:32:36+0900",
       "summary": "dashboard/page.tsx: handleStartAnalysis now parses UploadResponse from /api/upload (200) to get jobId, then POSTs jobId (AnalysisStartRequestBody, JSON body) to /api/analysis/start — matching step 4's real API contract instead of the old bodyless mock call; existing 402/other-error branches untouched. Logout button now calls handleLogout() (POST /api/auth/logout, then router.push('/')) instead of a static <Link href=\"/\">; page.module.css .logoutLink got border/background/cursor reset since it's now a <button> not an <a>. No DashboardView states added/removed, no layout/CSS redesign. page.test.tsx: extended the existing upload→analyze success test to assert the /api/analysis/start fetch call body is {jobId:\"job-1\"}, added a new logout test asserting POST /api/auth/logout + router.push('/'). npm run build / npm run lint / npm test all pass (144 tests; lint's one warning is pre-existing in login/page.tsx, unrelated to this step).",
-      "completed_at": "2026-09-19T22:38:00+0900"
+      "completed_at": "2026-09-19T22:34:29+0900"
     },
     {
       "step": 7,
