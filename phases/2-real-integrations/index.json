@@ -37,10 +37,10 @@
     {
       "step": 4,
       "name": "analysis-start-route",
-      "status": "error",
+      "status": "completed",
       "started_at": "2026-09-19T16:34:11+0900",
-      "error_message": "[3회 시도 후 실패] Step did not update status",
-      "failed_at": "2026-09-19T16:39:36+0900"
+      "summary": "POST /api/analysis/start now runs the real ADR-017 synchronous flow (model claude-opus-5): auth.getUser() 401 → jobId 400 → getUsageStatus() 402 → analysis_jobs lookup by id+user_id 404/409 → lazy stuck-job reap (other user_id row status='processing' with updated_at ≥300s → marked failed) or 409 if fresh → UPDATE to status='processing' (23505 unique_violation on ADR-013's partial index → 409) → 60s signed URL (ADR-014) → src/services/claude/extractTransactions.ts (fetches the file, CSV UTF-8-then-euc-kr decode via TextDecoder, PDF as base64 document block — Claude's PDF input handles scanned/image pages natively so no separate vision branch was needed) → src/services/claude/analyzeSpending.ts (categoryBreakdown defensively coerced to the fixed 12-category list, unknowns → 기타) → analysis_results upsert + analysis_jobs status='completed' → src/lib/usage.ts consumeOneAnalysis() (free-then-subscription, only on this success path) → 200 AnalysisResult; any thrown error in the extract/analyze/save block best-effort marks the job 'failed' (never throws past that) and returns generic 500. src/services/claude/client.ts (createClaudeClient) and the AnalysisStartRequestBody type already existed from a prior failed attempt at this step and were reused as-is. All admin-client queries filter by user_id explicitly per CLAUDE.md. Fixed a pre-existing failure in src/services/claude/client.test.ts (jsdom's global `window` was tripping the Anthropic SDK's browser-environment guard) by adding a `@vitest-environment node` override — needed to get `npm test` green. New tests: extractTransactions.test.ts, analyzeSpending.test.ts, usage.test.ts, and a rewritten route.test.ts (10 cases incl. the stale-job reap and 23505 race). npm run build / npm run lint / npm test all pass.",
+      "completed_at": "2026-09-19T22:29:00+0900"
     },
     {
       "step": 5,
