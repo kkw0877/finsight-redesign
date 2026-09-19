@@ -15,10 +15,18 @@ export interface CheckoutRequestBody {
   simulateFailure?: boolean; // 테스트 전용 훅: true면 결제 실패를 흉내낸다. 실제 Polar에는 없는 개념.
 }
 
+// CheckoutSuccessResponse는 phase 1 mock의 즉시-활성화 계약이다. step 7부터 실제 체크아웃
+// 라우트는 아래 CheckoutStartResponse(Polar 결제 페이지 URL)를 쓴다 — src/app/billing/page.tsx의
+// 화면 로직(현재 이 타입에 의존)을 실제 리다이렉트 흐름으로 바꾸는 배선은 step 8 범위라
+// 이 타입은 아직 제거하지 않았다.
 export interface CheckoutSuccessResponse {
   subscriptionStatus: "active";
   currentPeriodEnd: string;
   billedAt: string;
+}
+
+export interface CheckoutStartResponse {
+  checkoutUrl: string;
 }
 
 export interface CancelResponse {
