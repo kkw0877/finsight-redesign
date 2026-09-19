@@ -7,7 +7,8 @@
       "name": "service-clients-setup",
       "status": "completed",
       "started_at": "2026-09-19T16:19:18+0900",
-      "summary": "Installed @supabase/supabase-js@2.116.0, @supabase/ssr@0.12.7, @anthropic-ai/sdk@0.127.0, @polar-sh/sdk@0.49.0; added factory functions createAdminSupabaseClient() (src/services/supabase/admin.ts), createServerSupabaseClient(): Promise<SupabaseClient> (src/services/supabase/server.ts), updateSupabaseSession(request: NextRequest): Promise<{response: NextResponse; user: User|null}> (src/services/supabase/middleware.ts)"
+      "summary": "Installed @supabase/supabase-js@2.116.0, @supabase/ssr@0.12.7, @anthropic-ai/sdk@0.127.0, @polar-sh/sdk@0.49.0; added factory functions createAdminSupabaseClient() (src/services/supabase/admin.ts), createServerSupabaseClient(): Promise<SupabaseClient> (src/services/supabase/server.ts), updateSupabaseSession(request: NextRequest): Promise<{response: NextResponse; user: User|null}> (src/services/supabase/middleware.ts)",
+      "completed_at": "2026-09-19T16:22:18+0900"
     },
     {
       "step": 1,
