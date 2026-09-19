@@ -45,7 +45,9 @@
     {
       "step": 5,
       "name": "analysis-usage-read-routes",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-19T22:30:33+0900",
+      "summary": "GET /api/analysis/latest and GET /api/usage now use createServerSupabaseClient() (RLS-scoped, not admin) + auth.getUser() (401 if none); latest selects analysis_results by .eq('user_id', user.id) and maps snake_case columns (category_breakdown, generated_at, ...) to the camelCase AnalysisResult shape, 404 if no row; usage calls src/lib/usage.ts's existing getUsageStatus(supabase, user.id) unchanged and returns it as-is. Both wrap their DB calls in try/catch → 500 generic message on failure. Removed the mock fixture imports (src/lib/fixtures/usageFixture, analysisFixture's stateful getLatestResult/setLatestResult) from both routes; analysisFixture.ts itself is kept since MOCK_ANALYSIS_RESULT is still used as test fixture data and usageFixture.ts is kept since subscription routes (out of this step's scope) still depend on it. npm run build / npm run lint / npm test all pass (143 tests, including new 401/404/200/500 cases for both routes)."
     },
     {
       "step": 6,
