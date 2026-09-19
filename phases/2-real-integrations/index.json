@@ -24,7 +24,7 @@
       "status": "completed",
       "started_at": "2026-09-19T16:25:36+0900",
       "summary": "Added GET /api/auth/google (signInWithOAuth → redirect to Google, error → /login?error=oauth_failed), GET /auth/callback (exchangeCodeForSession → /welcome, missing/invalid code → /login?error=oauth_failed), POST /api/auth/logout (signOut → {success:true} 200); added src/proxy.ts (this Next.js version deprecated middleware.ts in favor of proxy.ts — see node_modules/next/dist/docs file-conventions/proxy.md — so the required matcher/logic was implemented as `export function proxy()` in src/proxy.ts, not src/middleware.ts) with matcher on exactly /dashboard, /billing, /api/upload, /api/analysis, /api/usage, /api/subscription — unauthenticated page requests redirect to /login, unauthenticated API requests get 401 JSON; /auth/callback, /api/auth/*, /api/webhooks/polar are excluded from the matcher. Rewired login/page.tsx to navigate via window.location.href (no client-side supabase-js import) and show a Korean error banner from the ?error query param, removing the old mock timeout/demo-failure button. IMPORTANT for next steps: proxy.ts only blocks unauthenticated requests — it does NOT forward user_id to route handlers, so every route in steps 3+ must call createServerSupabaseClient() + auth.getUser() itself and scope all queries by that user.id.",
-      "completed_at": "2026-09-19T16:31:00+0900"
+      "completed_at": "2026-09-19T16:31:11+0900"
     },
     {
       "step": 3,
