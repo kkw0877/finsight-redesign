@@ -1,27 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { GoogleButton, Spinner } from "@/components/ui";
 import styles from "./page.module.css";
 
+const ERROR_MESSAGES: Record<string, string> = {
+  oauth_failed: "구글 로그인에 실패했습니다. 다시 시도해주세요.",
+};
+
 export default function LoginPage() {
-  const router = useRouter();
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const errorParam = searchParams.get("error");
+  const errorMessage = errorParam ? ERROR_MESSAGES[errorParam] ?? ERROR_MESSAGES.oauth_failed : null;
 
   function handleSignIn() {
-    setError(false);
     setLoading(true);
-    setTimeout(() => {
-      router.push("/welcome");
-    }, 900);
-  }
-
-  // TODO: replace with real Supabase Auth error handling
-  function handleDemoFailure() {
-    setError(true);
+    window.location.href = "/api/auth/google";
   }
 
   return (
@@ -44,20 +49,15 @@ export default function LoginPage() {
           )}
         </div>
 
-        {error && (
+        {errorMessage && (
           <p className={`${styles.error} text-label-2`} role="alert">
-            Google sign-in failed. Please try again.
+            {errorMessage}
           </p>
         )}
 
         <Link href="/" className={`${styles.backLink} text-label-1-normal`}>
           ← Back to start
         </Link>
-
-        {/* TODO: replace with real Supabase Auth error handling */}
-        <button type="button" className={`${styles.demoLink} text-caption-1`} onClick={handleDemoFailure}>
-          Demo: preview sign-in failure
-        </button>
       </div>
     </main>
   );
