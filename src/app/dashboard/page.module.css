@@ -42,6 +42,9 @@
 }
 
 .logoutLink {
+  border: none;
+  background: none;
+  cursor: pointer;
   color: var(--label-alternative);
   text-decoration: none;
 }

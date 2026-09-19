@@ -103,6 +103,14 @@ describe("DashboardPage", () => {
     expect(screen.getAllByText(/식비/).length).toBeGreaterThan(0);
     expect(screen.getByText(/저축을 시작해 보세요\./)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/Free analyses 1\/2 left/)).toBeInTheDocument());
+
+    const analysisStartCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        requestUrl(input).endsWith("/api/analysis/start") && (init?.method ?? "GET") === "POST",
+    );
+    expect(analysisStartCall).toBeDefined();
+    const [, analysisStartInit] = analysisStartCall!;
+    expect(JSON.parse(analysisStartInit!.body as string)).toEqual({ jobId: "job-1" });
   });
 
   it("redirects to /billing when /api/analysis/start returns 402", async () => {
@@ -129,5 +137,35 @@ describe("DashboardPage", () => {
     await selectFileAndStartAnalysis();
 
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/billing"));
+  });
+
+  it("logs out via /api/auth/logout and navigates to the landing page", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      const method = init?.method ?? "GET";
+
+      if (url.endsWith("/api/usage")) {
+        return jsonResponse(baseUsage);
+      }
+      if (url.endsWith("/api/analysis/latest")) {
+        return jsonResponse({ error: "아직 분석 결과가 없습니다" }, 404);
+      }
+      if (url.endsWith("/api/auth/logout") && method === "POST") {
+        return jsonResponse({ success: true });
+      }
+      throw new Error(`Unexpected fetch call: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+    render(<DashboardPage />);
+
+    const logoutButton = await screen.findByRole("button", { name: /log out/i });
+    await user.click(logoutButton);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", { method: "POST" }),
+    );
+    expect(pushMock).toHaveBeenCalledWith("/");
   });
 });
