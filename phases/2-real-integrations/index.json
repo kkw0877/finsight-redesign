@@ -16,7 +16,7 @@
       "status": "completed",
       "started_at": "2026-09-19T16:22:18+0900",
       "summary": "supabase/migrations/20260919072249_initial_schema.sql — created usage_monthly, subscriptions, analysis_jobs (status: pending|processing|completed|failed, 4-state per this phase's confirmed design), analysis_results, webhook_events tables; unique index analysis_jobs_one_processing_per_user on (user_id) WHERE status='processing' (ADR-013); RLS enabled + auth.uid()=user_id policies on the 4 user_id tables, webhook_events RLS enabled with no authenticated/anon policies (ADR-012); private storage bucket card-statements (public=false, ADR-014). Applied to remote project fwnamclnlfvqtxovtsbp via `supabase db push` (migration list confirms local/remote match).",
-      "completed_at": "2026-09-19T16:26:00+0900"
+      "completed_at": "2026-09-19T16:25:36+0900"
     },
     {
       "step": 2,
