@@ -3,6 +3,10 @@ export interface UploadResponse {
   fileName: string;
 }
 
+export interface AnalysisStartRequestBody {
+  jobId: string;
+}
+
 export interface AnalysisStartResponseError {
   error: string; // 사용자에게 보여줄 이해 가능한 메시지 (내부 예외 노출 금지, CLAUDE.md CRITICAL 규칙)
 }
