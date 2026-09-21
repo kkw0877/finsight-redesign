@@ -16,6 +16,7 @@ import {
 } from "@/components/ui";
 import type { AnalysisResult } from "@/types/analysis";
 import type { UsageStatus } from "@/types/usage";
+import type { AnalysisStartRequestBody, UploadResponse } from "@/types/api";
 import styles from "./page.module.css";
 
 type DashboardView =
@@ -156,11 +157,22 @@ export default function DashboardPage() {
       return;
     }
 
+    const uploadResult: UploadResponse | null = await uploadResponse.json().catch(() => null);
+    if (!uploadResult) {
+      setUploadErrorMessage(DEFAULT_UPLOAD_ERROR_MESSAGE);
+      setView("upload-error");
+      return;
+    }
+
     setView("analyzing");
 
     let analysisResponse: Response;
     try {
-      analysisResponse = await fetch("/api/analysis/start", { method: "POST" });
+      analysisResponse = await fetch("/api/analysis/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: uploadResult.jobId } satisfies AnalysisStartRequestBody),
+      });
     } catch {
       setAnalysisErrorMessage(DEFAULT_ANALYSIS_ERROR_MESSAGE);
       setView("analysis-error");
@@ -190,6 +202,16 @@ export default function DashboardPage() {
     setView("empty");
   }
 
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // 로그아웃 실패해도 사용자를 랜딩으로 보낸다 — 세션이 남아있어도 다음 보호 화면
+      // 진입 시 미들웨어가 다시 걸러낸다.
+    }
+    router.push("/");
+  }
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -197,10 +219,13 @@ export default function DashboardPage() {
         <div className={styles.headerRight}>
           <UsageBadge text={usageBadgeText} warn={hasNoRemainingAnalyses} />
           <div className={styles.avatar}>A</div>
-          {/* TODO: replace with real Supabase Auth session invalidation */}
-          <Link href="/" className={`${styles.logoutLink} text-label-1-normal`}>
+          <button
+            type="button"
+            className={`${styles.logoutLink} text-label-1-normal`}
+            onClick={handleLogout}
+          >
             Log out
-          </Link>
+          </button>
         </div>
       </header>
 

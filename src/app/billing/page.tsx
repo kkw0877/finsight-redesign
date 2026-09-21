@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button, SectionCard, Spinner, StatusIconCircle } from "@/components/ui";
 import styles from "./page.module.css";
-import type { CheckoutSuccessResponse } from "@/types/api";
+import type { CheckoutStartResponse } from "@/types/api";
+import type { UsageStatus } from "@/types/usage";
 
-type BillingView = "plan" | "paying" | "success" | "error";
+type BillingView = "loading" | "plan" | "redirecting" | "subscribed" | "error";
 
 const PLAN_BENEFITS = [
   "2 additional analyses per month after your free 2 (up to 4/month total)",
@@ -25,44 +26,61 @@ function formatDate(isoDate: string): string {
 }
 
 export default function BillingPage() {
-  const [view, setView] = useState<BillingView>("plan");
-  const [checkoutResult, setCheckoutResult] = useState<CheckoutSuccessResponse | null>(null);
+  const [view, setView] = useState<BillingView>("loading");
+  const [usage, setUsage] = useState<UsageStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
-  async function submitCheckout(simulateFailure: boolean) {
-    setView("paying");
-    try {
-      const response = await fetch("/api/subscription/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ simulateFailure }),
+  useEffect(() => {
+    let active = true;
+
+    fetch("/api/usage")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: UsageStatus | null) => {
+        if (!active) return;
+        if (data && (data.subscriptionStatus === "active" || data.subscriptionStatus === "cancel_scheduled")) {
+          setUsage(data);
+          setView("subscribed");
+        } else {
+          setView("plan");
+        }
+      })
+      .catch(() => {
+        if (active) setView("plan");
       });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handlePay() {
+    setView("redirecting");
+    try {
+      const response = await fetch("/api/subscription/checkout", { method: "POST" });
       const data = await response.json();
       if (!response.ok) {
         setErrorMessage(data.error ?? GENERIC_ERROR_MESSAGE);
         setView("error");
         return;
       }
-      setCheckoutResult(data as CheckoutSuccessResponse);
-      setView("success");
+      const { checkoutUrl } = data as CheckoutStartResponse;
+      window.location.href = checkoutUrl;
     } catch {
       setErrorMessage(GENERIC_ERROR_MESSAGE);
       setView("error");
     }
   }
 
-  function handlePay() {
-    void submitCheckout(false);
-  }
-
-  function handlePreviewFailure() {
-    void submitCheckout(true);
-  }
-
   return (
     <main className={styles.page}>
       <div className={styles.card}>
-        {(view === "plan" || view === "paying") && (
+        {view === "loading" && (
+          <div className={styles.overlay}>
+            <Spinner size={32} />
+          </div>
+        )}
+
+        {(view === "plan" || view === "redirecting") && (
           <div className={styles.planWrap}>
             <h1 className={`${styles.title} text-heading-2`}>
               Keep analyzing with a monthly subscription
@@ -84,55 +102,34 @@ export default function BillingPage() {
               color="primary"
               size="lg"
               fullWidth
-              disabled={view === "paying"}
+              disabled={view === "redirecting"}
               onClick={handlePay}
             />
             <Link href="/dashboard" className={`${styles.secondaryLink} text-label-1-normal`}>
               Maybe later
             </Link>
-            <button
-              type="button"
-              className={`${styles.demoLink} text-caption-1`}
-              onClick={handlePreviewFailure}
-            >
-              Demo: preview payment failure
-            </button>
 
-            {view === "paying" && (
+            {view === "redirecting" && (
               <div className={styles.overlay}>
                 <Spinner size={24} />
                 <span className={`${styles.overlayText} text-label-1-normal`}>
-                  Processing payment...
+                  Redirecting to payment...
                 </span>
               </div>
             )}
           </div>
         )}
 
-        {view === "success" && checkoutResult && (
+        {view === "subscribed" && (
           <>
             <StatusIconCircle tone="positive" />
-            <h1 className={`${styles.title} text-heading-2`}>Your subscription is active!</h1>
-            <SectionCard className={styles.receiptCard}>
-              <div className={styles.receiptRow}>
-                <span className="text-body-2-normal">Plan</span>
-                <span className="text-body-2-normal">Finsight Premium</span>
-              </div>
-              <div className={styles.receiptRow}>
-                <span className="text-body-2-normal">Amount</span>
-                <span className="text-body-2-normal">₩9,900</span>
-              </div>
-              <div className={styles.receiptRow}>
-                <span className="text-body-2-normal">Billed on</span>
-                <span className="text-body-2-normal">{formatDate(checkoutResult.billedAt)}</span>
-              </div>
-              <div className={styles.receiptRow}>
-                <span className="text-body-2-normal">Next billing date</span>
-                <span className="text-body-2-normal">
-                  {formatDate(checkoutResult.currentPeriodEnd)}
-                </span>
-              </div>
-            </SectionCard>
+            <h1 className={`${styles.title} text-heading-2`}>You&apos;re already subscribed</h1>
+            <p className={`${styles.description} text-body-2-normal`}>
+              Your Finsight Premium subscription is active.
+              {usage?.currentPeriodEnd && (
+                <> Next billing date: {formatDate(usage.currentPeriodEnd)}.</>
+              )}
+            </p>
             <Link href="/dashboard">
               <Button label="Back to dashboard" variant="solid" color="primary" size="lg" />
             </Link>

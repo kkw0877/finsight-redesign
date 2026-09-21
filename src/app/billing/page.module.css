@@ -86,21 +86,6 @@
   color: var(--label-normal);
 }
 
-.receiptCard {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  text-align: left;
-}
-
-.receiptRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--label-normal);
-}
-
 .secondaryLink {
   color: var(--label-alternative);
   text-decoration: none;
@@ -108,16 +93,4 @@
 
 .secondaryLink:hover {
   color: var(--primary-normal);
-}
-
-.demoLink {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--label-assistive);
-  cursor: pointer;
-}
-
-.demoLink:hover {
-  color: var(--label-alternative);
 }

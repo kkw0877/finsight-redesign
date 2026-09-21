@@ -9,6 +9,12 @@
       "dir": "1-api-skeleton",
       "status": "completed",
       "completed_at": "2026-09-13T18:30:32+0900"
+    },
+    {
+      "dir": "2-real-integrations",
+      "status": "completed",
+      "failed_at": "2026-09-19T16:39:37+0900",
+      "completed_at": "2026-09-19T22:58:25+0900"
     }
   ]
 }

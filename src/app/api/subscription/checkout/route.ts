@@ -1,39 +1,38 @@
-import type { CheckoutRequestBody, CheckoutSuccessResponse } from "@/types/api";
-import { activateSubscription } from "@/lib/fixtures/usageFixture";
+import type { NextRequest } from "next/server";
+import type { CheckoutStartResponse } from "@/types/api";
+import { createServerSupabaseClient } from "@/services/supabase/server";
+import { createPolarClient } from "@/services/polar/client";
 
-async function parseBody(request: Request): Promise<CheckoutRequestBody> {
-  try {
-    const body = await request.json();
-    return { simulateFailure: body?.simulateFailure === true };
-  } catch {
-    return { simulateFailure: false };
+const GENERIC_ERROR_MESSAGE = "결제를 시작할 수 없습니다. 잠시 후 다시 시도해 주세요";
+
+export async function POST(request: NextRequest) {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return Response.json({ error: "로그인이 필요합니다" }, { status: 401 });
   }
-}
 
-export async function POST(request: Request) {
   try {
-    const { simulateFailure } = await parseBody(request);
-
-    // simulateFailure는 실제 Polar에 없는 개념 — 화면 쪽 결제 실패 UI를 테스트하기 위한 전용 훅.
-    if (simulateFailure) {
-      return Response.json(
-        { error: "결제에 실패했습니다. 다시 시도해주세요" },
-        { status: 402 },
-      );
+    const productId = process.env.POLAR_PRO_MONTHLY_PRODUCT_ID;
+    if (!productId) {
+      throw new Error("POLAR_PRO_MONTHLY_PRODUCT_ID가 설정되지 않았습니다");
     }
+    const successUrl = process.env.SUCCESS_URL ?? `${request.nextUrl.origin}/billing`;
 
-    const currentPeriodEnd = new Date();
-    currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+    const polar = createPolarClient();
+    // externalCustomerId에 우리 user.id를 담아야 웹훅(step 9)이 결제를 내부 사용자와 연결할 수 있다(ADR-012).
+    const checkout = await polar.checkouts.create({
+      products: [productId],
+      successUrl,
+      externalCustomerId: user.id,
+    });
 
-    activateSubscription(currentPeriodEnd.toISOString());
-
-    const response: CheckoutSuccessResponse = {
-      subscriptionStatus: "active",
-      currentPeriodEnd: currentPeriodEnd.toISOString(),
-      billedAt: new Date().toISOString(),
-    };
+    const response: CheckoutStartResponse = { checkoutUrl: checkout.url };
     return Response.json(response, { status: 200 });
   } catch {
-    return Response.json({ error: "결제 처리 중 문제가 발생했습니다" }, { status: 500 });
+    return Response.json({ error: GENERIC_ERROR_MESSAGE }, { status: 500 });
   }
 }

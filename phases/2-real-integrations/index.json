@@ -1,0 +1,96 @@
+{
+  "project": "Finsight",
+  "phase": "2-real-integrations",
+  "steps": [
+    {
+      "step": 0,
+      "name": "service-clients-setup",
+      "status": "completed",
+      "started_at": "2026-09-19T16:19:18+0900",
+      "summary": "Installed @supabase/supabase-js@2.116.0, @supabase/ssr@0.12.7, @anthropic-ai/sdk@0.127.0, @polar-sh/sdk@0.49.0; added factory functions createAdminSupabaseClient() (src/services/supabase/admin.ts), createServerSupabaseClient(): Promise<SupabaseClient> (src/services/supabase/server.ts), updateSupabaseSession(request: NextRequest): Promise<{response: NextResponse; user: User|null}> (src/services/supabase/middleware.ts)",
+      "completed_at": "2026-09-19T16:22:18+0900"
+    },
+    {
+      "step": 1,
+      "name": "db-schema-migration",
+      "status": "completed",
+      "started_at": "2026-09-19T16:22:18+0900",
+      "summary": "supabase/migrations/20260919072249_initial_schema.sql — created usage_monthly, subscriptions, analysis_jobs (status: pending|processing|completed|failed, 4-state per this phase's confirmed design), analysis_results, webhook_events tables; unique index analysis_jobs_one_processing_per_user on (user_id) WHERE status='processing' (ADR-013); RLS enabled + auth.uid()=user_id policies on the 4 user_id tables, webhook_events RLS enabled with no authenticated/anon policies (ADR-012); private storage bucket card-statements (public=false, ADR-014). Applied to remote project fwnamclnlfvqtxovtsbp via `supabase db push` (migration list confirms local/remote match).",
+      "completed_at": "2026-09-19T16:25:36+0900"
+    },
+    {
+      "step": 2,
+      "name": "auth-flow",
+      "status": "completed",
+      "started_at": "2026-09-19T16:25:36+0900",
+      "summary": "Added GET /api/auth/google (signInWithOAuth → redirect to Google, error → /login?error=oauth_failed), GET /auth/callback (exchangeCodeForSession → /welcome, missing/invalid code → /login?error=oauth_failed), POST /api/auth/logout (signOut → {success:true} 200); added src/proxy.ts (this Next.js version deprecated middleware.ts in favor of proxy.ts — see node_modules/next/dist/docs file-conventions/proxy.md — so the required matcher/logic was implemented as `export function proxy()` in src/proxy.ts, not src/middleware.ts) with matcher on exactly /dashboard, /billing, /api/upload, /api/analysis, /api/usage, /api/subscription — unauthenticated page requests redirect to /login, unauthenticated API requests get 401 JSON; /auth/callback, /api/auth/*, /api/webhooks/polar are excluded from the matcher. Rewired login/page.tsx to navigate via window.location.href (no client-side supabase-js import) and show a Korean error banner from the ?error query param, removing the old mock timeout/demo-failure button. IMPORTANT for next steps: proxy.ts only blocks unauthenticated requests — it does NOT forward user_id to route handlers, so every route in steps 3+ must call createServerSupabaseClient() + auth.getUser() itself and scope all queries by that user.id.",
+      "completed_at": "2026-09-19T16:31:11+0900"
+    },
+    {
+      "step": 3,
+      "name": "upload-route",
+      "status": "completed",
+      "started_at": "2026-09-19T16:31:11+0900",
+      "summary": "POST /api/upload now calls createServerSupabaseClient().auth.getUser() first (401 if none), keeps the existing extension/20MB validation, then uses createAdminSupabaseClient() to upload to the card-statements bucket at path `${user.id}/${jobId}/${file.name}` with an explicit contentType (text/csv|application/pdf derived from extension, not file.type), and inserts an analysis_jobs row {id: jobId, user_id, status: 'pending', source_file_path, source_file_type: 'csv'|'pdf', file_expires_at: now+24h ISO}; on insert failure it best-effort removes the uploaded storage object and returns a generic 500. UploadResponse {jobId, fileName} contract unchanged. Also set next.config.ts experimental.proxyClientMaxBodySize='25mb' — Next.js 16's proxy buffers bodies of proxy-matched routes at a 10MB default, which would have silently truncated uploads on this 20MB-limited, proxy-matched route.",
+      "completed_at": "2026-09-19T16:34:11+0900"
+    },
+    {
+      "step": 4,
+      "name": "analysis-start-route",
+      "status": "completed",
+      "started_at": "2026-09-19T16:34:11+0900",
+      "summary": "POST /api/analysis/start now runs the real ADR-017 synchronous flow (model claude-opus-5): auth.getUser() 401 → jobId 400 → getUsageStatus() 402 → analysis_jobs lookup by id+user_id 404/409 → lazy stuck-job reap (other user_id row status='processing' with updated_at ≥300s → marked failed) or 409 if fresh → UPDATE to status='processing' (23505 unique_violation on ADR-013's partial index → 409) → 60s signed URL (ADR-014) → src/services/claude/extractTransactions.ts (fetches the file, CSV UTF-8-then-euc-kr decode via TextDecoder, PDF as base64 document block — Claude's PDF input handles scanned/image pages natively so no separate vision branch was needed) → src/services/claude/analyzeSpending.ts (categoryBreakdown defensively coerced to the fixed 12-category list, unknowns → 기타) → analysis_results upsert + analysis_jobs status='completed' → src/lib/usage.ts consumeOneAnalysis() (free-then-subscription, only on this success path) → 200 AnalysisResult; any thrown error in the extract/analyze/save block best-effort marks the job 'failed' (never throws past that) and returns generic 500. src/services/claude/client.ts (createClaudeClient) and the AnalysisStartRequestBody type already existed from a prior failed attempt at this step and were reused as-is. All admin-client queries filter by user_id explicitly per CLAUDE.md. Fixed a pre-existing failure in src/services/claude/client.test.ts (jsdom's global `window` was tripping the Anthropic SDK's browser-environment guard) by adding a `@vitest-environment node` override — needed to get `npm test` green. New tests: extractTransactions.test.ts, analyzeSpending.test.ts, usage.test.ts, and a rewritten route.test.ts (10 cases incl. the stale-job reap and 23505 race). npm run build / npm run lint / npm test all pass.",
+      "completed_at": "2026-09-19T22:30:33+0900"
+    },
+    {
+      "step": 5,
+      "name": "analysis-usage-read-routes",
+      "status": "completed",
+      "started_at": "2026-09-19T22:30:33+0900",
+      "summary": "GET /api/analysis/latest and GET /api/usage now use createServerSupabaseClient() (RLS-scoped, not admin) + auth.getUser() (401 if none); latest selects analysis_results by .eq('user_id', user.id) and maps snake_case columns (category_breakdown, generated_at, ...) to the camelCase AnalysisResult shape, 404 if no row; usage calls src/lib/usage.ts's existing getUsageStatus(supabase, user.id) unchanged and returns it as-is. Both wrap their DB calls in try/catch → 500 generic message on failure. Removed the mock fixture imports (src/lib/fixtures/usageFixture, analysisFixture's stateful getLatestResult/setLatestResult) from both routes; analysisFixture.ts itself is kept since MOCK_ANALYSIS_RESULT is still used as test fixture data and usageFixture.ts is kept since subscription routes (out of this step's scope) still depend on it. npm run build / npm run lint / npm test all pass (143 tests, including new 401/404/200/500 cases for both routes).",
+      "completed_at": "2026-09-19T22:32:36+0900"
+    },
+    {
+      "step": 6,
+      "name": "dashboard-integration",
+      "status": "completed",
+      "started_at": "2026-09-19T22:32:36+0900",
+      "summary": "dashboard/page.tsx: handleStartAnalysis now parses UploadResponse from /api/upload (200) to get jobId, then POSTs jobId (AnalysisStartRequestBody, JSON body) to /api/analysis/start — matching step 4's real API contract instead of the old bodyless mock call; existing 402/other-error branches untouched. Logout button now calls handleLogout() (POST /api/auth/logout, then router.push('/')) instead of a static <Link href=\"/\">; page.module.css .logoutLink got border/background/cursor reset since it's now a <button> not an <a>. No DashboardView states added/removed, no layout/CSS redesign. page.test.tsx: extended the existing upload→analyze success test to assert the /api/analysis/start fetch call body is {jobId:\"job-1\"}, added a new logout test asserting POST /api/auth/logout + router.push('/'). npm run build / npm run lint / npm test all pass (144 tests; lint's one warning is pre-existing in login/page.tsx, unrelated to this step).",
+      "completed_at": "2026-09-19T22:34:29+0900"
+    },
+    {
+      "step": 7,
+      "name": "subscription-routes",
+      "status": "completed",
+      "started_at": "2026-09-19T22:34:29+0900",
+      "summary": "Added createPolarClient() factory (src/services/polar/client.ts, new Polar({accessToken, server}) with POLAR_SERVER unset→'sandbox' default per ADR-008). POST /api/subscription/checkout now creates a real Polar checkout session (polar.checkouts.create({products:[POLAR_PRO_MONTHLY_PRODUCT_ID], successUrl: process.env.SUCCESS_URL ?? `${origin}/billing`, externalCustomerId: user.id})) and returns 200 {checkoutUrl} typed as new CheckoutStartResponse (src/types/api.ts) — externalCustomerId carries user.id so step 9's webhook can resolve the internal user from Polar's customer.external_id. POST /api/subscription/cancel now RLS-selects the caller's subscriptions row (status/polar_subscription_id), 400s if not active, else calls polar.subscriptions.update({id: polar_subscription_id, subscriptionUpdate: {cancelAtPeriodEnd: true}}) (NOT subscriptions.revoke, which cancels immediately) and returns {subscriptionStatus:'cancel_scheduled', currentPeriodEnd} from Polar's response — verified by test that supabase .update/.upsert are never called (ADR-012, webhook is the only writer). simulateFailure fully removed from both route implementations (kept as a field on the CheckoutRequestBody type per the step's literal instruction, but now unused/dead there). .env.example updated to POLAR_PRO_MONTHLY_PRODUCT_ID/SUCCESS_URL/POLAR_SERVER (values left blank). DEVIATION for step 8: kept CheckoutSuccessResponse in src/types/api.ts (did not remove/replace it) instead of touching src/app/billing/page.tsx — the step's own 금지사항 explicitly forbids editing billing/page.tsx in this step, and that file's success view is structurally tied to CheckoutSuccessResponse's {subscriptionStatus, currentPeriodEnd, billedAt} shape (not a one-line import fix), so removing it would require rewriting the page and its test, which is step 8's named scope. Step 8 must: rewire billing/page.tsx to POST /api/subscription/checkout, redirect to the returned checkoutUrl instead of rendering an inline success panel, remove the now-fully-dead src/lib/fixtures/usageFixture.ts usage and simulateFailure/demo-preview-failure button, and then delete CheckoutSuccessResponse from src/types/api.ts. npm run build / npm run lint / npm test all pass (149 tests; the one lint warning is the pre-existing, unrelated login/page.tsx window.location warning noted in step 6).",
+      "completed_at": "2026-09-19T22:39:22+0900"
+    },
+    {
+      "step": 8,
+      "name": "billing-integration",
+      "status": "completed",
+      "started_at": "2026-09-19T22:39:22+0900",
+      "summary": "src/app/billing/page.tsx view state machine is now loading|plan|redirecting|subscribed|error (was plan|paying|success|error): on mount fetches GET /api/usage and shows 'subscribed' if subscriptionStatus is active/cancel_scheduled else 'plan' (usage fetch failure also falls back to 'plan', per-step-8 instruction not to block checkout on this read); Pay button POSTs bodyless /api/subscription/checkout and does a full window.location.href redirect to the returned checkoutUrl (CheckoutStartResponse) instead of rendering an inline receipt; removed the 'Demo: preview payment failure' button/handlePreviewFailure and the old inline success receipt view (billedAt row) entirely — no query-param parsing of the Polar redirect is done anywhere, subscription status is always re-derived from GET /api/usage per ADR-012. Deleted now-fully-dead CheckoutSuccessResponse from src/types/api.ts (its only remaining reference was the old test) per step 7's summary note; left CheckoutRequestBody.simulateFailure in place as pre-existing unrelated dead code (not touched, per CLAUDE.md surgical-changes rule) — worth removing in a future cleanup step. Removed now-unused .receiptCard/.receiptRow/.demoLink rules from page.module.css. Rewrote page.test.tsx (5 cases: plan view on usage:none, subscribed view + currentPeriodEnd on usage:active, checkoutUrl redirect via window.location.href spy, error view on checkout failure, plan-view fallback on usage fetch failure). Did not touch dashboard/page.tsx or add any cancel/manage-subscription UI (both explicitly out of scope). npm run build / npm run lint / npm test all pass (152 tests; the one lint warning is the pre-existing, unrelated login/page.tsx window.location warning noted in step 6).",
+      "completed_at": "2026-09-19T22:41:42+0900"
+    },
+    {
+      "step": 9,
+      "name": "polar-webhook",
+      "status": "completed",
+      "started_at": "2026-09-19T22:41:42+0900",
+      "summary": "POST /api/webhooks/polar (no session — Polar signature only, ADR-012; already excluded from src/proxy.ts's matcher, left untouched) uses validateEvent/WebhookVerificationError from '@polar-sh/sdk/webhooks' (a wrapper over the 'standardwebhooks' Standard Webhooks lib) against request.text() raw bytes + POLAR_WEBHOOK_SECRET, 401 on WebhookVerificationError before any JSON.parse. DEVIATION from the step doc's assumed payload shape: verified via node_modules that in @polar-sh/sdk@0.49.0 none of the Webhook*Payload types carry a top-level `id` (only `{type, timestamp, data}`) and there is no 'subscription.cycled' webhook event at all in this SDK's parseEvent switch (only subscription.created/updated/active/canceled/uncanceled/revoked/past_due) — 'subscription.cycled' only exists as an unrelated Events-API model. So idempotency uses the Standard Webhooks 'webhook-id' HTTP header (not a body field) as webhook_events.id, and 'subscription.cycled' is handled by the same generic 'unrecognized type' fallback as every other type outside the mapping table (validateEvent throwing anything other than WebhookVerificationError, e.g. SDKValidationError for a type its switch doesn't know, is treated identically to a type it does parse but that isn't in the 4-case table below — idempotency recorded, 200, no subscriptions write). Mapping implemented: subscription.active → upsert(status:'active', polar_subscription_id, polar_customer_id, current_period_end, auto_renew:true) onConflict user_id; subscription.canceled → upsert(status:'cancel_scheduled', auto_renew:false, same other fields); subscription.revoked → update(status:'inactive') only, scoped .eq('user_id', ...); subscription.updated → update(current_period_end, auto_renew:!cancelAtPeriodEnd) only, scoped .eq('user_id', ...), silently no-ops via 0-row UPDATE if no row exists yet; every other type (subscription.created/uncanceled/past_due/etc.) → webhook_events insert only, no subscriptions write. Correlation user_id is read from event.data.customer.externalId (set by step 7's checkout externalCustomerId); missing externalId → console.error + no subscriptions write + 200 (Polar must not retry-storm). Idempotency: SELECT webhook_events by id (the header value) → existing row short-circuits to 200 before any subscriptions write; insert 23505 unique-violation race → same short-circuit. webhook_events.processed_at updated after successful processing (best-effort, logged not thrown on failure). SubscriptionStatus untouched (still exactly none|active|cancel_scheduled|inactive, no 'past_due' added). New route.test.ts (7 cases: signature failure, first-time active→upsert, idempotent replay, canceled→cancel_scheduled, revoked→inactive, past_due(unmapped type)→event recorded but no subscriptions write, missing externalId→no write+200). npm run build / npm run lint / npm test all pass (159 tests; the one lint warning is the pre-existing, unrelated login/page.tsx window.location warning noted in step 6).",
+      "completed_at": "2026-09-19T22:48:40+0900"
+    },
+    {
+      "step": 10,
+      "name": "pg-cron-cleanup",
+      "status": "completed",
+      "started_at": "2026-09-19T22:48:40+0900",
+      "summary": "supabase/migrations/20260919135301_cleanup_expired_uploads.sql enables pg_net (schema extensions) and pg_cron (schema pg_catalog, both already creatable via SQL on this project — no Dashboard step needed), creates public.cleanup_expired_uploads() (SECURITY DEFINER, search_path='', all refs schema-qualified) which array_aggs analysis_jobs.source_file_path where file_expires_at < now() and status <> 'processing' (all 4 statuses eligible except processing, analysis_jobs/analysis_results rows themselves untouched per ADR-007) and fires one net.http_delete bulk-delete call (DELETE .../storage/v1/object/card-statements with body {prefixes:[...]}) per run — pg_net's async response handling means a 404 on an already-deleted object never surfaces as an error to this function. The Storage REST API service_role bearer/apikey is read at call-time from vault.decrypted_secrets where name='service_role_key' (returns early with a warning if unset, never raises); the actual secret value was registered separately via `supabase db query --linked` reading SUPABASE_SERVICE_ROLE_KEY from .env.local into a shell var (never appearing in any committed file or command text) — NOT part of the migration, so no plaintext key is in git. cron.schedule registers job 'cleanup-expired-uploads' on '0 * * * *' (hourly, ADR-011's delay-tradeoff kept short); the migration first unschedules any existing job of that name so `supabase db push` stays idempotent on retry. Verified end-to-end on the linked remote project (fwnamclnlfvqtxovtsbp): `select cron.job` shows the active hourly job; manually invoking public.cleanup_expired_uploads() with 0 analysis_jobs rows returns cleanly; a direct net.http_delete test call with a dummy prefix against the real Storage API returned status_code 200 confirming the header/body/auth shape is correct. `supabase db push` / npm run build / npm run lint / npm test all pass (159 tests unchanged — this step has no TS code, per the step doc's own note that vitest only guards against regressions here).",
+      "completed_at": "2026-09-19T22:58:25+0900"
+    }
+  ],
+  "created_at": "2026-09-19T16:19:18+0900",
+  "completed_at": "2026-09-19T22:58:25+0900"
+}
