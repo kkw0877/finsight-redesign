@@ -1,0 +1,66 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run /review-code
+        id: review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE BRANCH: ${{ github.event.pull_request.base.ref }}
+
+            .claude/commands/review-code.md 파일을 Read 툴로 읽고, 그 지시를 그대로 따라
+            이 PR을 리뷰하라.
+
+            단, "1. 리뷰 대상 확정" 단계의 자동 감지 로직 대신 아래 커맨드로 diff를 확보하라:
+              git diff origin/${{ github.event.pull_request.base.ref }}...HEAD
+
+            review-code.md가 정의한 2층 포맷(파일별 인라인 코멘트 + PR 전체 요약)을 그대로
+            작성한 뒤, 최종 결과는 반드시 아래 JSON 스키마에 맞춰 반환하라. report_markdown
+            필드에는 인라인 코멘트 전체와 PR 요약을 합친 마크다운 텍스트를 그대로 담는다.
+          claude_args: |
+            --allowedTools "Task,Read,Grep,Glob,Bash(git diff:*),Bash(git status:*),Bash(git log:*)"
+            --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["Approve","Changes Requested","Blocked"]},"critical_count":{"type":"integer"},"major_count":{"type":"integer"},"minor_count":{"type":"integer"},"nit_count":{"type":"integer"},"report_markdown":{"type":"string"}},"required":["verdict","report_markdown"]}'
+
+      - name: Post review comment
+        uses: actions/github-script@v7
+        env:
+          REVIEW_OUTPUT: ${{ steps.review.outputs.structured_output }}
+        with:
+          script: |
+            const output = JSON.parse(process.env.REVIEW_OUTPUT);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: output.report_markdown,
+            });
+
+      - name: Fail check if Blocked
+        env:
+          REVIEW_OUTPUT: ${{ steps.review.outputs.structured_output }}
+        run: |
+          VERDICT=$(echo "$REVIEW_OUTPUT" | jq -r '.verdict')
+          echo "Verdict: $VERDICT"
+          if [ "$VERDICT" = "Blocked" ]; then
+            echo "::error::Blocked - critical issue(s) found. See PR comment for details."
+            exit 1
+          fi
