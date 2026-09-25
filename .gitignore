@@ -44,3 +44,6 @@ next-env.d.ts
 # harness phase execution outputs
 phases/**/phase*-output.json
 phases/**/step*-output.json
+
+# personal study notes (not a project doc)
+docs/RETROSPECT.md
