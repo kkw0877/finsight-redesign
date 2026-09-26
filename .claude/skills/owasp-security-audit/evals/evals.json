@@ -1,0 +1,46 @@
+{
+  "skill_name": "owasp-security-audit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "이 변경사항 보안 스캔해줘. 방금 src/app/api/analysis/[id]/route.ts 새로 추가했어 (내용은 첨부 fixture 참고).",
+      "expected_output": "Diff-mode scan. Flags the missing user_id filter on the service-role query as critical, tagged [A01:2025] and [PROJECT-CRITICAL-2]; flags the unsanitized RPC string interpolation as [A05:2025] Injection; flags the raw error.message exposure as critical, tagged [A10:2025] and [PROJECT-CRITICAL-3]. Saves a timestamped report under security-reports/ and also prints a summary in chat.",
+      "files": ["evals/fixtures/route-analysis-missing-user-filter.ts.md"],
+      "expectations": [
+        "A security-report file was saved under security-reports/ (not just printed to chat)",
+        "Missing user_id filter is flagged critical and tagged with both [A01:2025] and [PROJECT-CRITICAL-2]",
+        "The unsanitized RPC string interpolation is flagged and tagged [A05:2025] Injection",
+        "The raw error.message exposure in the catch block is flagged critical and tagged both [A10:2025] and [PROJECT-CRITICAL-3]",
+        "The report's Findings section is structured by OWASP category (A01 through A10, not just a flat list) with an Executive Summary severity table and a verdict"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "전체 코드베이스 OWASP 감사해줘. 배포 전에 supply chain 취약점도 같이 체크해줘. 아래 두 fixture를 참고 코드/의존성으로 취급해줘.",
+      "expected_output": "Full-mode scan across all 10 categories. Flags the client-side direct Supabase call and unauthenticated signed-URL issuance ([A01:2025]/[A02:2025], PROJECT-CRITICAL-1, PROJECT-CRITICAL-4) and the hardcoded service-role key in client code ([A04:2025], critical) from the storage fixture. Runs actual npm audit against the vulnerable-package.json fixture (in an isolated scratch copy) and reports lodash/minimist CVEs under an [A03:2025] section with package name + advisory reference. Final report is ordered A01 through A10 with an Executive Summary severity table and a verdict.",
+      "files": [
+        "evals/fixtures/upload-storage-client.ts.md",
+        "evals/fixtures/vulnerable-package.json"
+      ],
+      "expectations": [
+        "The scan ran in full-mode (whole codebase), not diff-mode",
+        "The client-side direct Supabase call and unauthenticated signed-URL issuance from the storage fixture is flagged (A01:2025/A02:2025, referencing PROJECT-CRITICAL-1 and/or PROJECT-CRITICAL-4)",
+        "The hardcoded service-role key in client-side code is flagged critical under A04:2025",
+        "npm audit was actually invoked as a real shell command (not just LLM reading of package.json) - evidence of real JSON output being parsed",
+        "lodash and/or minimist CVEs from the vulnerable-package.json fixture appear under an A03:2025 section with package name + version + advisory/CVE reference",
+        "The final report is ordered A01 through A10 with an Executive Summary severity table and a verdict"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "이 코드 안전한가요? PR 올리기 전에 한번 봐줘 — src/app/api/analysis 쪽 로직을 바꿨어 (첨부 fixture가 변경 내용이야).",
+      "expected_output": "Skill triggers despite no literal 'OWASP'/'보안' keyword in the prompt (tests description-based triggering). Produces the same structured, saved, OWASP-tagged report as eval 1 — not just an informal inline comment.",
+      "files": ["evals/fixtures/route-analysis-missing-user-filter.ts.md"],
+      "expectations": [
+        "The agent invoked the owasp-security-audit skill despite the prompt containing no literal 'OWASP', '보안', or '취약점' keyword",
+        "The resulting output is a structured, OWASP-tagged, saved report file (same shape as eval 1), not just an informal inline comment",
+        "The missing user_id filter and raw error exposure from the fixture are still correctly flagged despite the indirect phrasing"
+      ]
+    }
+  ]
+}

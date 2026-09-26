@@ -47,3 +47,7 @@ phases/**/step*-output.json
 
 # personal study notes (not a project doc)
 docs/RETROSPECT.md
+
+# owasp-security-audit skill output (contains unpatched vuln details)
+/security-reports/
+.claude/skills/owasp-security-audit-workspace/

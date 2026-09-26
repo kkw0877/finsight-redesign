@@ -1,0 +1,10 @@
+{
+  "name": "owasp-audit-eval-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Standalone package.json used only inside an isolated scratch copy for the A03 supply-chain eval. Never installed into the real repo.",
+  "dependencies": {
+    "lodash": "4.17.4",
+    "minimist": "0.0.8"
+  }
+}
