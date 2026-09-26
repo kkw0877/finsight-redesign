@@ -51,3 +51,7 @@ docs/RETROSPECT.md
 # owasp-security-audit skill output (contains unpatched vuln details)
 /security-reports/
 .claude/skills/owasp-security-audit-workspace/
+
+# perf-loop: raw lighthouse JSON + screenshots per run (large, regenerable) —
+# RESEARCH_LOG.md itself is tracked
+/scripts/perf-loop/reports/
