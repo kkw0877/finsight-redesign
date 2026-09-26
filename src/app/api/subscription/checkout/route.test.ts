@@ -67,9 +67,10 @@ describe("POST /api/subscription/checkout", () => {
     );
   });
 
-  it("returns 500 with a generic message when the Polar API call fails", async () => {
+  it("returns 500 with a generic message and logs the failure when the Polar API call fails", async () => {
     vi.mocked(createServerSupabaseClient).mockResolvedValue(mockSupabase(MOCK_USER) as never);
     checkoutsCreateMock.mockRejectedValue(new Error("polar: invalid product id"));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await POST(makeRequest());
 
@@ -77,5 +78,11 @@ describe("POST /api/subscription/checkout", () => {
     const body = await response.json();
     expect(body.error).toBeTypeOf("string");
     expect(body.error).not.toContain("invalid product id");
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Polar 체크아웃 생성 실패",
+      expect.objectContaining({ userId: "user-1" }),
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 });

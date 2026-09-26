@@ -32,7 +32,10 @@ export async function POST(request: NextRequest) {
 
     const response: CheckoutStartResponse = { checkoutUrl: checkout.url };
     return Response.json(response, { status: 200 });
-  } catch {
+  } catch (err) {
+    // 결제 실패는 반드시 로깅한다 — 그렇지 않으면 상품 ID 오설정 등으로 신규 구독이 전부
+    // 막혀도 운영팀이 감지할 방법이 없다(OWASP A09:2025).
+    console.error("Polar 체크아웃 생성 실패", { userId: user.id, err });
     return Response.json({ error: GENERIC_ERROR_MESSAGE }, { status: 500 });
   }
 }

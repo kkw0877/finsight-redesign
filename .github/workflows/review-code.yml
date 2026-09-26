@@ -13,13 +13,13 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
 
       - name: Run /review-code
         id: review
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@463de76bf8c9124e9db5840d63d542ffd14c4f60 # v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -42,7 +42,7 @@ jobs:
             --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["Approve","Changes Requested","Blocked"]},"critical_count":{"type":"integer"},"major_count":{"type":"integer"},"minor_count":{"type":"integer"},"nit_count":{"type":"integer"},"report_markdown":{"type":"string"}},"required":["verdict","report_markdown"]}'
 
       - name: Post review comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           REVIEW_OUTPUT: ${{ steps.review.outputs.structured_output }}
         with:

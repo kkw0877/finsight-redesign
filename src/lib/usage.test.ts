@@ -4,13 +4,16 @@ import { consumeOneAnalysis, getCurrentPeriodMonth, getUsageStatus } from "./usa
 
 type Row = Record<string, unknown>;
 
-function makeSupabaseStub(tables: {
-  usage_monthly?: Row[];
-  subscriptions?: Row[];
-}): { client: SupabaseClient; upserts: Row[] } {
+function makeSupabaseStub(
+  tables: {
+    usage_monthly?: Row[];
+    subscriptions?: Row[];
+  },
+  rpcResult: { error: unknown } = { error: null },
+): { client: SupabaseClient; rpcCalls: { fn: string; args: Row }[] } {
   const usageMonthly = tables.usage_monthly ?? [];
   const subscriptions = tables.subscriptions ?? [];
-  const upserts: Row[] = [];
+  const rpcCalls: { fn: string; args: Row }[] = [];
 
   const from = vi.fn((table: string) => {
     if (table === "usage_monthly") {
@@ -25,10 +28,6 @@ function makeSupabaseStub(tables: {
             }),
           }),
         }),
-        upsert: (row: Row) => {
-          upserts.push(row);
-          return Promise.resolve({ error: null });
-        },
       };
     }
     if (table === "subscriptions") {
@@ -46,7 +45,12 @@ function makeSupabaseStub(tables: {
     throw new Error(`unexpected table: ${table}`);
   });
 
-  return { client: { from } as unknown as SupabaseClient, upserts };
+  const rpc = vi.fn((fn: string, args: Row) => {
+    rpcCalls.push({ fn, args });
+    return Promise.resolve(rpcResult);
+  });
+
+  return { client: { from, rpc } as unknown as SupabaseClient, rpcCalls };
 }
 
 describe("getCurrentPeriodMonth", () => {
@@ -105,27 +109,23 @@ describe("getUsageStatus", () => {
 });
 
 describe("consumeOneAnalysis", () => {
-  it("무료 잔여가 있으면 free_used_count를 1 증가시킨다", async () => {
-    const { client, upserts } = makeSupabaseStub({});
+  it("increment_usage RPC를 사용자/기간/무료한도와 함께 원자적으로 호출한다(read-then-write 아님)", async () => {
+    const { client, rpcCalls } = makeSupabaseStub({});
 
     await consumeOneAnalysis(client, "user-1");
 
-    expect(upserts).toHaveLength(1);
-    expect(upserts[0].free_used_count).toBe(1);
-    expect(upserts[0].subscription_used_count).toBe(0);
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].fn).toBe("increment_usage");
+    expect(rpcCalls[0].args).toEqual({
+      p_user_id: "user-1",
+      p_period_month: getCurrentPeriodMonth(),
+      p_free_limit: 2,
+    });
   });
 
-  it("무료 소진 시 subscription_used_count를 1 증가시킨다", async () => {
-    const periodMonth = getCurrentPeriodMonth();
-    const { client, upserts } = makeSupabaseStub({
-      usage_monthly: [
-        { user_id: "user-1", period_month: periodMonth, free_used_count: 2, subscription_used_count: 0 },
-      ],
-    });
+  it("RPC가 에러를 반환하면 예외를 던진다", async () => {
+    const { client } = makeSupabaseStub({}, { error: new Error("db down") });
 
-    await consumeOneAnalysis(client, "user-1");
-
-    expect(upserts[0].free_used_count).toBe(2);
-    expect(upserts[0].subscription_used_count).toBe(1);
+    await expect(consumeOneAnalysis(client, "user-1")).rejects.toThrow();
   });
 });

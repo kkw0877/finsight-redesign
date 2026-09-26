@@ -94,7 +94,7 @@ describe("POST /api/subscription/cancel", () => {
     expect(supabase.__upsert).not.toHaveBeenCalled();
   });
 
-  it("returns 500 with a generic message when the Polar API call fails", async () => {
+  it("returns 500 with a generic message and logs the failure when the Polar API call fails", async () => {
     vi.mocked(createServerSupabaseClient).mockResolvedValue(
       mockSupabase({
         user: MOCK_USER,
@@ -102,6 +102,7 @@ describe("POST /api/subscription/cancel", () => {
       }) as never,
     );
     subscriptionsUpdateMock.mockRejectedValue(new Error("polar: not found"));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await POST();
 
@@ -109,5 +110,11 @@ describe("POST /api/subscription/cancel", () => {
     const body = await response.json();
     expect(body.error).toBeTypeOf("string");
     expect(body.error).not.toContain("not found");
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Polar 구독 해지 요청 실패",
+      expect.objectContaining({ userId: "user-1" }),
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 });

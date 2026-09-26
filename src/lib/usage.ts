@@ -72,24 +72,22 @@ export async function getUsageStatus(supabase: SupabaseClient, userId: string): 
   };
 }
 
-/** 정상 완료된 분석에 대해서만 호출한다 — 무료 잔여 우선 차감, 소진 시 구독분 차감(F-ILHNGA). */
+/**
+ * 정상 완료된 분석에 대해서만 호출한다 — 무료 잔여 우선 차감, 소진 시 구독분 차감(F-ILHNGA).
+ *
+ * 읽은 뒤 +1 해서 upsert하는 방식이 아니라 `increment_usage` DB 함수(단일 원자적
+ * INSERT ... ON CONFLICT DO UPDATE, 20260926190000_atomic_usage_increment.sql)를 호출한다 —
+ * 사용자당 동시 processing job은 1개로 강제되지만(ADR-013), 한 job의 완료 처리와 다음 job의
+ * 완료 처리가 짧은 간격으로 겹치면 read-then-write 방식은 lost update로 쿼터를 초과시킬 수
+ * 있었다.
+ */
 export async function consumeOneAnalysis(supabase: SupabaseClient, userId: string): Promise<void> {
   const periodMonth = getCurrentPeriodMonth();
-  const usageRow = await fetchUsageRow(supabase, userId, periodMonth);
 
-  const nextFreeUsedCount =
-    usageRow.free_used_count < FREE_LIMIT ? usageRow.free_used_count + 1 : usageRow.free_used_count;
-  const nextSubscriptionUsedCount =
-    usageRow.free_used_count < FREE_LIMIT
-      ? usageRow.subscription_used_count
-      : usageRow.subscription_used_count + 1;
-
-  const { error } = await supabase.from(USAGE_TABLE).upsert({
-    user_id: userId,
-    period_month: periodMonth,
-    free_used_count: nextFreeUsedCount,
-    subscription_used_count: nextSubscriptionUsedCount,
-    updated_at: new Date().toISOString(),
+  const { error } = await supabase.rpc("increment_usage", {
+    p_user_id: userId,
+    p_period_month: periodMonth,
+    p_free_limit: FREE_LIMIT,
   });
 
   if (error) {

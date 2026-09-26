@@ -27,6 +27,11 @@ export async function POST(request: NextRequest) {
     event = validateEvent(rawBody, headers, secret);
   } catch (err) {
     if (err instanceof WebhookVerificationError) {
+      // 위조/변조된 웹훅 서명 시도 — 결제 웹훅에 대한 반복 위조 시도를 탐지하려면 반드시
+      // 로깅해야 한다(OWASP A09:2025).
+      console.error("Polar 웹훅 서명 검증 실패", {
+        webhookId: request.headers.get("webhook-id"),
+      });
       return Response.json({ error: "서명 검증에 실패했습니다" }, { status: 401 });
     }
     // 서명은 유효하지만 이 SDK 버전이 알지 못하는 이벤트 타입(payload 파싱 실패) — 상태 매핑

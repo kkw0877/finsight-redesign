@@ -67,10 +67,27 @@ describe("extractTransactions", () => {
 
     const callArgs = create.mock.calls[0][0];
     const blocks = callArgs.messages[0].content;
+    expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe("document");
     expect(blocks[0].source.type).toBe("base64");
     expect(blocks[0].source.media_type).toBe("application/pdf");
-    expect(blocks[1].type).toBe("text");
+  });
+
+  it("지시문은 system 파라미터로 분리하고 사용자 메시지에는 데이터만 담는다(프롬프트 인젝션 방지)", async () => {
+    const csvBytes = new TextEncoder().encode("날짜,가맹점,금액\n2026-08-01,스타벅스,4500").buffer;
+    stubFetchOk(csvBytes);
+    const create = vi.fn().mockResolvedValue({ content: [{ type: "text", text: "[]" }] });
+    const client = { messages: { create } } as unknown as Anthropic;
+
+    await extractTransactions({ client, signedUrl: "https://example.com/signed", fileType: "csv" });
+
+    const callArgs = create.mock.calls[0][0];
+    expect(callArgs.system).toContain("카드 내역서에서 거래 내역을 추출하는 도구");
+    expect(callArgs.system).toContain("신뢰할 수 없는");
+
+    const userText = callArgs.messages[0].content[0].text as string;
+    expect(userText).toContain("<statement_data>");
+    expect(userText).not.toContain("카드 내역서에서 거래 내역을 추출하는 도구");
   });
 
   it("응답이 코드펜스로 감싸져 있어도 파싱한다", async () => {

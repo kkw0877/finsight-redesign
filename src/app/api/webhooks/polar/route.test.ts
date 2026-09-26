@@ -130,17 +130,24 @@ describe("POST /api/webhooks/polar", () => {
     vi.unstubAllEnvs();
   });
 
-  it("returns 401 and writes nothing when signature verification fails", async () => {
+  it("returns 401, logs the forged/invalid signature attempt, and writes nothing", async () => {
     vi.mocked(validateEvent).mockImplementation(() => {
       throw new WebhookVerificationError("invalid signature");
     });
     const admin = mockAdmin();
     vi.mocked(createAdminSupabaseClient).mockReturnValue(admin as never);
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const response = await POST(makeRequest("{}"));
+    const response = await POST(makeRequest("{}", "evt_forged_1"));
 
     expect(response.status).toBe(401);
     expect(admin.from).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Polar 웹훅 서명 검증 실패",
+      expect.objectContaining({ webhookId: "evt_forged_1" }),
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("records a new event and activates the subscription for the correlated user", async () => {

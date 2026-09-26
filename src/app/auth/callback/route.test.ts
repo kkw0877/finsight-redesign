@@ -30,13 +30,17 @@ describe("GET /auth/callback", () => {
     expect(exchangeCodeForSessionMock).not.toHaveBeenCalled();
   });
 
-  it("세션 교환에 실패하면 로그인 실패 화면으로 리다이렉트한다", async () => {
+  it("세션 교환에 실패하면 로그인 실패 화면으로 리다이렉트하고 실패를 로깅한다", async () => {
     exchangeCodeForSessionMock.mockResolvedValue({ error: new Error("invalid code") });
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await GET(makeRequest("?code=abc123"));
 
     expect([302, 307]).toContain(response.status);
     expect(response.headers.get("location")).toContain("/login?error=oauth_failed");
+    expect(consoleErrorSpy).toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("세션 교환에 성공하면 welcome 화면으로 리다이렉트한다", async () => {

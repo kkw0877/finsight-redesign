@@ -50,6 +50,21 @@ describe("analyzeSpending", () => {
     expect(text).toContain("쿠팡");
   });
 
+  it("지시문은 system 파라미터로 분리하고 사용자 메시지에는 거래 데이터만 담는다(2차 프롬프트 인젝션 방지)", async () => {
+    const create = vi.fn().mockResolvedValue({ content: [{ type: "text", text: JSON.stringify(VALID_RESPONSE) }] });
+    const client = { messages: { create } } as unknown as Anthropic;
+
+    await analyzeSpending({ client, transactions: SAMPLE_TRANSACTIONS });
+
+    const callArgs = create.mock.calls[0][0];
+    expect(callArgs.system).toContain("소비 인사이트를 생성하는 도구");
+    expect(callArgs.system).toContain("신뢰할 수 없는");
+
+    const userText = callArgs.messages[0].content as string;
+    expect(userText).toContain("<transactions_data>");
+    expect(userText).not.toContain("소비 인사이트를 생성하는 도구");
+  });
+
   it("고정 12개 밖의 카테고리는 기타로 귀속시킨다", async () => {
     const response = {
       ...VALID_RESPONSE,

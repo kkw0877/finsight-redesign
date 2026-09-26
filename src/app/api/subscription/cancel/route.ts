@@ -42,7 +42,10 @@ export async function POST() {
       currentPeriodEnd: new Date(updated.currentPeriodEnd).toISOString(),
     };
     return Response.json(response, { status: 200 });
-  } catch {
+  } catch (err) {
+    // 결제 실패는 반드시 로깅한다(OWASP A09:2025) — 취소 요청이 조용히 실패하면 운영팀이
+    // 감지할 방법이 없다.
+    console.error("Polar 구독 해지 요청 실패", { userId: user.id, err });
     return Response.json({ error: GENERIC_ERROR_MESSAGE }, { status: 500 });
   }
 }
