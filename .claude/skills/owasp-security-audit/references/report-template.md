@@ -1,7 +1,10 @@
 # 리포트 템플릿
 
-취합 단계에서 아래 구조 그대로 `security-reports/<YYYY-MM-DD>-<HHmm>-<mode>.md`에 Write한다.
-`{...}` 부분만 채우고, 표/헤딩 구조와 순서(A01→A10)는 그대로 유지한다.
+취합 단계에서 아래 구조 그대로
+`security-reports/<YYYY-MM-DD>-<HHMMSS>-<4자리 랜덤 hex>-<mode>.md`에 Write한다 (분 단위까지만
+쓰면 스킬을 짧은 간격으로 두 번 실행했을 때 파일명이 겹쳐 이전 리포트를 덮어쓸 수 있으므로 초
+단위 + 랜덤 suffix까지 포함 — SKILL.md §4.5 참고). `{...}` 부분만 채우고, 표/헤딩 구조와
+순서(A01→A10)는 그대로 유지한다.
 
 ```markdown
 # Security Audit Report — Finsight

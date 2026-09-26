@@ -79,9 +79,14 @@ supply-chain 서브에이전트 프롬프트에 다음을 명시한다:
 4. **판정**: critical이 하나라도 있으면 🔴 Blocked, critical 없이 major가 있으면 🟠 Changes
    Requested, minor/nit만 있거나 findings가 없으면 🟢 Approve.
 5. `references/report-template.md`의 템플릿을 그대로 채워
-   `security-reports/<YYYY-MM-DD>-<HHmm>-<mode>.md`에 Write한다 (`security-reports/` 디렉토리가
-   없으면 새로 만든다 — 이 디렉토리는 `.gitignore`에 포함되어 있으므로 git 추적 대상이 아니다).
-   타임스탬프로 파일을 누적하고 기존 리포트를 덮어쓰지 않는다.
+   `security-reports/<YYYY-MM-DD>-<HHMMSS>-<4자리 랜덤 hex>-<mode>.md`에 Write한다
+   (`security-reports/` 디렉토리가 없으면 새로 만든다 — 이 디렉토리는 `.gitignore`에 포함되어
+   있으므로 git 추적 대상이 아니다). 분 단위(`HHmm`)까지만 쓰면 짧은 시간 안에 스킬을 두 번 이상
+   돌렸을 때(예: diff 스캔과 full 스캔을 연달아 실행) 같은 파일명이 나와 이전 리포트를 덮어쓸 수
+   있으므로, 초 단위 + 랜덤 suffix까지 반드시 포함한다 (예: `date +%Y-%m-%d-%H%M%S`로 얻은 값 뒤에
+   임의의 4자리 hex를 붙임). Write 직전에 같은 이름의 파일이 이미 있으면(동시 실행이 초 단위까지
+   겹친 극단적 경우) 랜덤 suffix를 다시 뽑아 재시도한다. 타임스탬프로 파일을 누적하고 기존
+   리포트를 덮어쓰지 않는다.
 6. 저장한 파일의 정확한 경로를 사용자에게 알리고, 리포트 본문(또는 Executive Summary +
    critical/major 항목 요약)을 대화창에도 출력한다 — 파일에만 저장하고 끝내지 않는다.
 
