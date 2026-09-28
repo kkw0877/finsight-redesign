@@ -52,6 +52,9 @@ docs/RETROSPECT.md
 /security-reports/
 .claude/skills/owasp-security-audit-workspace/
 
+# supabase-db-audit skill output (contains unpatched DB advisor details)
+/db-reports/
+
 # perf-loop: raw lighthouse JSON + screenshots per run (large, regenerable) —
 # RESEARCH_LOG.md itself is tracked
 /scripts/perf-loop/reports/
