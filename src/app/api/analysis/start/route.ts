@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { after } from "next/server";
+import { emitPostHogLog, flushPostHogLogs } from "@/instrumentation";
 import type { AnalysisResult } from "@/types/analysis";
 import type { AnalysisStartRequestBody, AnalysisStartResponseError } from "@/types/api";
 import { createServerSupabaseClient } from "@/services/supabase/server";
@@ -124,6 +127,11 @@ export async function POST(request: Request) {
       throw markProcessingError;
     }
 
+    emitPostHogLog("analysis processing started", "INFO", {
+      event: "analysis_processing_started",
+      source_file_type: job.source_file_type,
+    });
+
     try {
       const { data: signedUrlData, error: signedUrlError } = await admin.storage
         .from(STORAGE_BUCKET)
@@ -133,18 +141,33 @@ export async function POST(request: Request) {
         throw signedUrlError ?? new Error("signed URL 발급에 실패했습니다");
       }
 
-      const claude = createClaudeClient();
-      const transactions = await extractTransactions({
-        client: claude,
-        signedUrl: signedUrlData.signedUrl,
-        fileType: job.source_file_type,
-      });
+      const { client: claude, posthog } = createClaudeClient();
+      const observability = posthog
+        ? {
+            posthogDistinctId: user.id,
+            posthogTraceId: randomUUID(),
+            posthogProperties: { $ai_session_id: jobId },
+          }
+        : undefined;
 
-      // F-BLDQBC: 분석 대상 거래가 없으면 억지로 추천을 만들지 않고 빈 결과로 처리(정상 완료)
-      const analysis =
-        transactions.length === 0
-          ? buildEmptyAnalysis()
-          : await analyzeSpending({ client: claude, transactions });
+      let transactions: Awaited<ReturnType<typeof extractTransactions>>;
+      let analysis: Awaited<ReturnType<typeof analyzeSpending>>;
+      try {
+        transactions = await extractTransactions({
+          client: claude,
+          signedUrl: signedUrlData.signedUrl,
+          fileType: job.source_file_type,
+          observability,
+        });
+
+        // F-BLDQBC: 분석 대상 거래가 없으면 억지로 추천을 만들지 않고 빈 결과로 처리(정상 완료)
+        analysis =
+          transactions.length === 0
+            ? buildEmptyAnalysis()
+            : await analyzeSpending({ client: claude, transactions, observability });
+      } finally {
+        await posthog?.shutdown();
+      }
 
       const generatedAt = new Date().toISOString();
       const result: AnalysisResult = { ...analysis, generatedAt };
@@ -176,6 +199,15 @@ export async function POST(request: Request) {
       // 정상 완료된 분석에 대해서만 차감 (F-ILHNGA)
       await consumeOneAnalysis(admin, user.id);
 
+      emitPostHogLog("analysis processing completed", "INFO", {
+        event: "analysis_processing_completed",
+        source_file_type: job.source_file_type,
+        has_transactions: transactions.length > 0,
+      });
+      after(async () => {
+        await flushPostHogLogs();
+      });
+
       return Response.json(result, { status: 200 });
     } catch {
       try {
@@ -191,6 +223,13 @@ export async function POST(request: Request) {
       } catch {
         // best-effort — 다음 요청의 lazy 재수거가 최종 안전장치다 (ADR-017)
       }
+      emitPostHogLog("analysis processing failed", "ERROR", {
+        event: "analysis_processing_failed",
+        source_file_type: job.source_file_type,
+      });
+      after(async () => {
+        await flushPostHogLogs();
+      });
       return errorResponse(GENERIC_ERROR_MESSAGE, 500);
     }
   } catch {

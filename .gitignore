@@ -58,3 +58,7 @@ docs/RETROSPECT.md
 # perf-loop: raw lighthouse JSON + screenshots per run (large, regenerable) —
 # RESEARCH_LOG.md itself is tracked
 /scripts/perf-loop/reports/
+.env.local
+
+# PostHog wizard local cache (regenerable)
+.posthog-wizard-cache/

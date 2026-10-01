@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import type { ClaudeObservabilityContext } from "./client";
 
 /**
  * ADR-004: 거래일/가맹점명/금액/거래 유형만 담는다 — 카드번호·계좌번호 등 결제수단
@@ -81,8 +82,9 @@ export async function extractTransactions(params: {
   client: Anthropic;
   signedUrl: string;
   fileType: "csv" | "pdf";
+  observability?: ClaudeObservabilityContext;
 }): Promise<ExtractedTransaction[]> {
-  const { client, signedUrl, fileType } = params;
+  const { client, signedUrl, fileType, observability } = params;
 
   const fileResponse = await fetch(signedUrl);
   if (!fileResponse.ok) {
@@ -117,6 +119,7 @@ export async function extractTransactions(params: {
     max_tokens: 16000,
     system: EXTRACTION_INSTRUCTIONS,
     messages: [{ role: "user", content }],
+    ...(observability ?? {}),
   });
 
   return parseTransactionsResponse(extractResponseText(response));

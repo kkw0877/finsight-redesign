@@ -1,7 +1,7 @@
 // 하네스 품질 eval 회귀 게이트. 사용법: npm run eval [-- review|qa]
 // golden set을 subject에 돌리고 Opus judge가 pass/fail 채점, 하나라도 실패하면 exit 1.
 import { exitCode, formatReport, summarize, checkBalance } from "./lib/aggregate.ts";
-import { JUDGE_MODEL, SUBJECT_MODEL, runJudge, runSubject } from "./lib/llm.ts";
+import { JUDGE_MODEL, SUBJECT_MODEL, runJudge, runSubject, shutdownLLMObservability } from "./lib/llm.ts";
 import { loadCases, readLiveClaudeMd } from "./lib/load.ts";
 import { buildQaJudgePrompt, buildQaSystem, buildReviewJudgePrompt, buildReviewerSystem, parseVerdict } from "./lib/prompts.ts";
 import type { Case, CaseResult } from "./lib/types.ts";
@@ -44,4 +44,10 @@ async function main(): Promise<number> {
   return exitCode(summary);
 }
 
-process.exit(await main());
+let exitStatus = 1;
+try {
+  exitStatus = await main();
+} finally {
+  await shutdownLLMObservability();
+}
+process.exit(exitStatus);

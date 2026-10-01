@@ -51,6 +51,18 @@ describe("GET /api/usage", () => {
     expect(getUsageStatus).toHaveBeenCalledWith(expect.anything(), MOCK_USER.id);
   });
 
+  it("does not expose the user's email in response headers", async () => {
+    vi.mocked(createServerSupabaseClient).mockResolvedValue(
+      mockSupabase({ id: "user-1", email: "user@example.com" } as never) as never,
+    );
+    vi.mocked(getUsageStatus).mockResolvedValue(MOCK_USAGE_STATUS);
+
+    const response = await GET();
+    const headerValues = [...response.headers.values()].join(" ");
+    expect(headerValues).not.toContain("user@example.com");
+    expect(response.headers.get("X-Finsight-PostHog-Person-Email")).toBeNull();
+  });
+
   it("returns 500 with a generic message when getUsageStatus throws", async () => {
     vi.mocked(createServerSupabaseClient).mockResolvedValue(mockSupabase(MOCK_USER) as never);
     vi.mocked(getUsageStatus).mockRejectedValue(new Error("connection refused"));

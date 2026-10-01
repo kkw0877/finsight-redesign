@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import posthog from "posthog-js";
 import { GoogleButton, Spinner } from "@/components/ui";
 import styles from "./page.module.css";
 
@@ -26,6 +27,12 @@ function LoginForm() {
 
   function handleSignIn() {
     setLoading(true);
+    if (
+      process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+      process.env.NEXT_PUBLIC_POSTHOG_HOST
+    ) {
+      posthog.capture("google_sign_in_started");
+    }
     window.location.href = "/api/auth/google";
   }
 

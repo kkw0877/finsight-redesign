@@ -17,9 +17,12 @@ describe("createClaudeClient", () => {
 
   it("env가 정상이면 예외 없이 클라이언트를 반환한다", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "test-api-key");
+    vi.stubEnv("NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN", "test-project-token");
+    vi.stubEnv("NEXT_PUBLIC_POSTHOG_HOST", "https://posthog.example.com");
 
-    const client = createClaudeClient();
+    const { client, posthog } = createClaudeClient();
     expect(client).toBeDefined();
     expect(typeof client.messages.create).toBe("function");
+    expect(posthog).toBeDefined();
   });
 });

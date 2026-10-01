@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AnalysisResult, Category } from "@/types/analysis";
+import type { ClaudeObservabilityContext } from "./client";
 import type { ExtractedTransaction } from "./extractTransactions";
 
 const CATEGORIES: readonly Category[] = [
@@ -158,8 +159,9 @@ function parseAnalysisResponse(text: string): AnalysisPayload {
 export async function analyzeSpending(params: {
   client: Anthropic;
   transactions: ExtractedTransaction[];
+  observability?: ClaudeObservabilityContext;
 }): Promise<AnalysisPayload> {
-  const { client, transactions } = params;
+  const { client, transactions, observability } = params;
 
   // 지시문(ANALYSIS_INSTRUCTIONS)은 system 파라미터로 분리하고, 거래 내역(1단계 추출 결과 —
   // 가맹점명 등이 오염됐을 수 있는 신뢰할 수 없는 데이터)은 <transactions_data> 태그로 감싼
@@ -175,6 +177,7 @@ export async function analyzeSpending(params: {
         content: `<transactions_data>\n${JSON.stringify(transactions)}\n</transactions_data>`,
       },
     ],
+    ...(observability ?? {}),
   });
 
   return parseAnalysisResponse(extractResponseText(response));

@@ -3,6 +3,7 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import posthog from "posthog-js";
 import {
   Badge,
   Button,
@@ -55,6 +56,17 @@ function formatFileSize(bytes: number): string {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
+function identifyFromUsageResponse(response: Response) {
+  if (!process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN || !process.env.NEXT_PUBLIC_POSTHOG_HOST) {
+    return;
+  }
+
+  const userId = response.headers?.get("X-Finsight-PostHog-Distinct-Id");
+  if (!userId) return;
+
+  posthog.identify(userId);
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [view, setView] = useState<DashboardView>("empty");
@@ -69,7 +81,10 @@ export default function DashboardPage() {
   async function refreshUsage() {
     try {
       const response = await fetch("/api/usage");
-      if (response.ok) setUsage(await response.json());
+      if (response.ok) {
+        identifyFromUsageResponse(response);
+        setUsage(await response.json());
+      }
     } catch {
       // Usage badge just keeps showing the last known value.
     }
@@ -79,7 +94,11 @@ export default function DashboardPage() {
     let active = true;
 
     fetch("/api/usage")
-      .then((response) => (response.ok ? response.json() : null))
+      .then((response) => {
+        if (!response.ok) return null;
+        identifyFromUsageResponse(response);
+        return response.json();
+      })
       .then((data: UsageStatus | null) => {
         if (active && data) setUsage(data);
       })
@@ -134,6 +153,12 @@ export default function DashboardPage() {
     if (!selectedFile) return;
 
     if (hasNoRemainingAnalyses) {
+      if (
+        process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+        process.env.NEXT_PUBLIC_POSTHOG_HOST
+      ) {
+        posthog.capture("analysis_limit_reached");
+      }
       router.push("/billing");
       return;
     }
@@ -181,6 +206,12 @@ export default function DashboardPage() {
 
     if (analysisResponse.status === 200) {
       const result: AnalysisResult = await analysisResponse.json();
+      if (
+        process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+        process.env.NEXT_PUBLIC_POSTHOG_HOST
+      ) {
+        posthog.capture("analysis_completed");
+      }
       setAnalysisResult(result);
       setView("result");
       refreshUsage();
@@ -204,7 +235,15 @@ export default function DashboardPage() {
 
   async function handleLogout() {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (
+        response.ok &&
+        process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+        process.env.NEXT_PUBLIC_POSTHOG_HOST
+      ) {
+        posthog.capture("user_logged_out");
+        posthog.reset();
+      }
     } catch {
       // 로그아웃 실패해도 사용자를 랜딩으로 보낸다 — 세션이 남아있어도 다음 보호 화면
       // 진입 시 미들웨어가 다시 걸러낸다.

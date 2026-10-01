@@ -13,7 +13,9 @@ export async function GET() {
     }
 
     const usageStatus = await getUsageStatus(supabase, user.id);
-    return Response.json(usageStatus, { status: 200 });
+    const headers = new Headers({ "X-Finsight-PostHog-Distinct-Id": user.id });
+
+    return Response.json(usageStatus, { status: 200, headers });
   } catch {
     return Response.json(
       { error: "조회 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요" },

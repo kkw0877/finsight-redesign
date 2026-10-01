@@ -9,7 +9,14 @@ vi.mock("@/services/supabase/admin", () => ({
   createAdminSupabaseClient: vi.fn(),
 }));
 vi.mock("@/services/claude/client", () => ({
-  createClaudeClient: vi.fn(() => ({})),
+  createClaudeClient: vi.fn(() => ({ client: {}, posthog: { shutdown: vi.fn() } })),
+}));
+vi.mock("next/server", () => ({
+  after: vi.fn(),
+}));
+vi.mock("@/instrumentation", () => ({
+  emitPostHogLog: vi.fn(),
+  flushPostHogLogs: vi.fn(),
 }));
 vi.mock("@/services/claude/extractTransactions", () => ({
   extractTransactions: vi.fn(),
@@ -307,6 +314,11 @@ describe("POST /api/analysis/start", () => {
     expect(upserts).toHaveLength(1);
     expect(upserts[0].user_id).toBe(USER_ID);
     expect(upserts[0].job_id).toBe(JOB_ID);
+    const extractionObservability = vi.mocked(extractTransactions).mock.calls[0][0].observability;
+    const analysisObservability = vi.mocked(analyzeSpending).mock.calls[0][0].observability;
+    expect(extractionObservability?.posthogDistinctId).toBe(USER_ID);
+    expect(extractionObservability?.posthogProperties.$ai_session_id).toBe(JOB_ID);
+    expect(extractionObservability?.posthogTraceId).toBe(analysisObservability?.posthogTraceId);
     expect(jobs.find((j) => j.id === JOB_ID)?.status).toBe("completed");
     expect(consumeOneAnalysis).toHaveBeenCalledWith(client, USER_ID);
   });

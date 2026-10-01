@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import posthog from "posthog-js";
 import { Button, SectionCard, Spinner, StatusIconCircle } from "@/components/ui";
 import styles from "./page.module.css";
 import type { CheckoutStartResponse } from "@/types/api";
@@ -25,6 +26,17 @@ function formatDate(isoDate: string): string {
   });
 }
 
+function identifyFromUsageResponse(response: Response) {
+  if (!process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN || !process.env.NEXT_PUBLIC_POSTHOG_HOST) {
+    return;
+  }
+
+  const userId = response.headers?.get("X-Finsight-PostHog-Distinct-Id");
+  if (!userId) return;
+
+  posthog.identify(userId);
+}
+
 export default function BillingPage() {
   const [view, setView] = useState<BillingView>("loading");
   const [usage, setUsage] = useState<UsageStatus | null>(null);
@@ -34,7 +46,11 @@ export default function BillingPage() {
     let active = true;
 
     fetch("/api/usage")
-      .then((response) => (response.ok ? response.json() : null))
+      .then((response) => {
+        if (!response.ok) return null;
+        identifyFromUsageResponse(response);
+        return response.json();
+      })
       .then((data: UsageStatus | null) => {
         if (!active) return;
         if (data && (data.subscriptionStatus === "active" || data.subscriptionStatus === "cancel_scheduled")) {
@@ -64,6 +80,12 @@ export default function BillingPage() {
         return;
       }
       const { checkoutUrl } = data as CheckoutStartResponse;
+      if (
+        process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+        process.env.NEXT_PUBLIC_POSTHOG_HOST
+      ) {
+        posthog.capture("checkout_started");
+      }
       window.location.href = checkoutUrl;
     } catch {
       setErrorMessage(GENERIC_ERROR_MESSAGE);
