@@ -62,3 +62,4 @@ docs/RETROSPECT.md
 
 # PostHog wizard local cache (regenerable)
 .posthog-wizard-cache/
+posthog-ai-observability-report.md
