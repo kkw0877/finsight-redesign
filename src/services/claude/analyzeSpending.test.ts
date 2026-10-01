@@ -79,6 +79,42 @@ describe("analyzeSpending", () => {
     expect(result.categoryBreakdown[0].category).toBe("기타");
   });
 
+  it("목록 밖 카테고리가 여러 개여도 기타 하나로 합산한다", async () => {
+    const response = {
+      ...VALID_RESPONSE,
+      categoryBreakdown: [
+        { category: "반려동물", amount: 10000, ratio: 0.3, description: "반려동물 용품비입니다." },
+        { category: "쇼핑", amount: 20000, ratio: 0.6, description: "쇼핑 지출입니다." },
+        { category: "기타", amount: 3000, ratio: 0.1, description: "그 외 지출입니다." },
+      ],
+    };
+    const client = fakeClient(JSON.stringify(response));
+
+    const result = await analyzeSpending({ client, transactions: SAMPLE_TRANSACTIONS });
+
+    const others = result.categoryBreakdown.filter((c) => c.category === "기타");
+    expect(others).toHaveLength(1);
+    expect(others[0].amount).toBe(13000);
+    expect(others[0].ratio).toBeCloseTo(0.4);
+    expect(others[0].description).toContain("반려동물 용품비입니다.");
+    expect(others[0].description).toContain("그 외 지출입니다.");
+    expect(result.categoryBreakdown.map((c) => c.category)).toEqual(["기타", "쇼핑"]);
+  });
+
+  it("프롬프트는 이름에 /가 들어간 카테고리가 쪼개지지 않도록 따옴표로 감싸 나열한다", async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: JSON.stringify(VALID_RESPONSE) }],
+    });
+    const client = { messages: { create } } as unknown as Anthropic;
+
+    await analyzeSpending({ client, transactions: SAMPLE_TRANSACTIONS });
+
+    const system = create.mock.calls[0][0].system as string;
+    expect(system).toContain('"카페/간식"');
+    expect(system).toContain('"문화/여가"');
+    expect(system).not.toContain("식비/교통/카페/간식");
+  });
+
   it("응답이 코드펜스로 감싸져 있어도 파싱한다", async () => {
     const client = fakeClient("```json\n" + JSON.stringify(VALID_RESPONSE) + "\n```");
 

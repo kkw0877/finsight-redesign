@@ -27,7 +27,7 @@ const ANALYSIS_INSTRUCTIONS = `당신은 카드 거래 내역을 분석해 소�
 {
   "summary": { "totalAmount": 전체 지출 합계(정수), "periodStart": "YYYY-MM-DD", "periodEnd": "YYYY-MM-DD" },
   "categoryBreakdown": [
-    { "category": "다음 12개 중 하나 — 식비/교통/카페/간식/쇼핑/문화/여가/의료/건강/주거/관리비/통신비/교육/여행/구독/금융/기타", "amount": 카테고리 합계, "ratio": 전체 대비 비중(0~1), "description": "이해하기 쉬운 한국어 설명" }
+    { "category": "다음 12개 중 하나(쉼표로 구분, 이름 안의 /는 이름의 일부) — \"식비\", \"교통\", \"카페/간식\", \"쇼핑\", \"문화/여가\", \"의료/건강\", \"주거/관리비\", \"통신비\", \"교육\", \"여행\", \"구독/금융\", \"기타\"", "amount": 카테고리 합계, "ratio": 전체 대비 비중(0~1), "description": "이해하기 쉬운 한국어 설명" }
   ],
   "anomalies": [
     { "relatedTransactions": ["관련 거래 설명"], "reason": "이상 판단 근거", "note": "주의 수준/관리 필요성 설명" }
@@ -87,7 +87,7 @@ function parseAnalysisResponse(text: string): AnalysisPayload {
   }
 
   const rawCategoryBreakdown = Array.isArray(record.categoryBreakdown) ? record.categoryBreakdown : [];
-  const categoryBreakdown = rawCategoryBreakdown.map((item) => {
+  const parsedCategoryBreakdown = rawCategoryBreakdown.map((item) => {
     const entry = item as Record<string, unknown>;
     if (
       typeof entry.amount !== "number" ||
@@ -103,6 +103,19 @@ function parseAnalysisResponse(text: string): AnalysisPayload {
       description: entry.description,
     };
   });
+
+  // 목록 밖 카테고리가 기타로 귀속되면 같은 카테고리가 여러 줄이 될 수 있어 하나로 합산한다.
+  const categoryBreakdown: typeof parsedCategoryBreakdown = [];
+  for (const item of parsedCategoryBreakdown) {
+    const existing = categoryBreakdown.find((c) => c.category === item.category);
+    if (existing) {
+      existing.amount += item.amount;
+      existing.ratio += item.ratio;
+      existing.description = `${existing.description} ${item.description}`;
+    } else {
+      categoryBreakdown.push({ ...item });
+    }
+  }
 
   const rawAnomalies = Array.isArray(record.anomalies) ? record.anomalies : [];
   const anomalies = rawAnomalies.map((item) => {

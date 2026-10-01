@@ -416,7 +416,7 @@ export default function DashboardPage() {
               </h2>
               <div className={styles.categoryList}>
                 {analysisResult.categoryBreakdown.map((category, index) => (
-                  <div key={category.category} className={styles.categoryRow}>
+                  <div key={`${category.category}-${index}`} className={styles.categoryRow}>
                     <div className={styles.categoryLabelRow}>
                       <span className="text-body-2-normal">{category.category}</span>
                       <span className="text-body-2-normal">
