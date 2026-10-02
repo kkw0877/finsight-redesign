@@ -63,3 +63,5 @@ docs/RETROSPECT.md
 # PostHog wizard local cache (regenerable)
 .posthog-wizard-cache/
 posthog-ai-observability-report.md
+.claude/skills/ai-observability-anthropic-node/
+.claude/skills/integration-nextjs-app-router/
