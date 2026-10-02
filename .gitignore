@@ -65,3 +65,6 @@ docs/RETROSPECT.md
 posthog-ai-observability-report.md
 .claude/skills/ai-observability-anthropic-node/
 .claude/skills/integration-nextjs-app-router/
+
+# oncall CI auto-fix: sanitized failure logs / PR body scratch dir
+/.oncall/
