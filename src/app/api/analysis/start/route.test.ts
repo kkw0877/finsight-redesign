@@ -24,6 +24,11 @@ vi.mock("@/services/claude/extractTransactions", () => ({
 vi.mock("@/services/claude/analyzeSpending", () => ({
   analyzeSpending: vi.fn(),
 }));
+vi.mock("@/services/posthog/server", () => ({
+  captureServerEvent: vi.fn(),
+  logServerEvent: vi.fn(),
+  errorTypeOf: (err: unknown) => (err instanceof Error ? err.name : "unknown"),
+}));
 vi.mock("@/lib/usage", () => ({
   getUsageStatus: vi.fn(),
   consumeOneAnalysis: vi.fn(),
@@ -34,6 +39,7 @@ import { createAdminSupabaseClient } from "@/services/supabase/admin";
 import { extractTransactions } from "@/services/claude/extractTransactions";
 import { analyzeSpending } from "@/services/claude/analyzeSpending";
 import { consumeOneAnalysis, getUsageStatus } from "@/lib/usage";
+import { captureServerEvent } from "@/services/posthog/server";
 import { POST } from "./route";
 
 type Row = Record<string, unknown>;
@@ -227,6 +233,9 @@ describe("POST /api/analysis/start", () => {
     expect(body.error).toBeTypeOf("string");
     expect(extractTransactions).not.toHaveBeenCalled();
     expect(consumeOneAnalysis).not.toHaveBeenCalled();
+    expect(captureServerEvent).toHaveBeenCalledWith(USER_ID, "analysis_limit_reached", {
+      source: "server",
+    });
   });
 
   it("존재하지 않는 jobId는 404를 반환한다", async () => {
@@ -321,6 +330,18 @@ describe("POST /api/analysis/start", () => {
     expect(extractionObservability?.posthogTraceId).toBe(analysisObservability?.posthogTraceId);
     expect(jobs.find((j) => j.id === JOB_ID)?.status).toBe("completed");
     expect(consumeOneAnalysis).toHaveBeenCalledWith(client, USER_ID);
+    expect(captureServerEvent).toHaveBeenCalledWith(
+      USER_ID,
+      "analysis_completed",
+      expect.objectContaining({
+        file_type: "csv",
+        transaction_count: 1,
+        category_count: VALID_ANALYSIS.categoryBreakdown.length,
+        anomaly_count: VALID_ANALYSIS.anomalies.length,
+        recommendation_count: VALID_ANALYSIS.recommendations.length,
+        duration_ms: expect.any(Number),
+      }),
+    );
   });
 
   it("Claude 호출이 실패하면 500을 반환하고 job을 failed로 갱신 시도하며 사용량은 차감하지 않는다", async () => {
@@ -338,6 +359,38 @@ describe("POST /api/analysis/start", () => {
     expect(body.error).not.toContain("boom");
     expect(jobs.find((j) => j.id === JOB_ID)?.status).toBe("failed");
     expect(consumeOneAnalysis).not.toHaveBeenCalled();
+    expect(captureServerEvent).toHaveBeenCalledWith(
+      USER_ID,
+      "analysis_failed",
+      expect.objectContaining({
+        file_type: "csv",
+        stage: "extraction",
+        error_type: "Error",
+        duration_ms: expect.any(Number),
+      }),
+    );
+    // 예외 메시지(내부 정보/개인정보 가능성)는 이벤트 속성에 넣지 않는다.
+    expect(JSON.stringify(vi.mocked(captureServerEvent).mock.calls)).not.toContain("boom");
+  });
+
+  it("거래 추출은 성공했지만 소비 분석이 실패하면 stage를 analysis로 기록한다", async () => {
+    mockAuthedUser();
+    mockFullUsage();
+    const { client } = createFakeAdminClient({ jobs: [pendingJob()] });
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(client);
+    vi.mocked(extractTransactions).mockResolvedValue([
+      { date: "2026-09-01", merchant: "A", amount: 10000, transactionType: "일시불" },
+    ]);
+    vi.mocked(analyzeSpending).mockRejectedValue(new TypeError("bad json"));
+
+    const response = await POST(makeRequest({ jobId: JOB_ID }));
+
+    expect(response.status).toBe(500);
+    expect(captureServerEvent).toHaveBeenCalledWith(
+      USER_ID,
+      "analysis_failed",
+      expect.objectContaining({ stage: "analysis", error_type: "TypeError" }),
+    );
   });
 
   it("동시 요청 경합으로 UPDATE가 unique_violation(23505)에 걸리면 409를 반환한다", async () => {

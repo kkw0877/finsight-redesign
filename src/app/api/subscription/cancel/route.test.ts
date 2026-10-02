@@ -12,6 +12,13 @@ vi.mock("@/services/polar/client", () => ({
   })),
 }));
 
+vi.mock("@/services/posthog/server", () => ({
+  captureServerEvent: vi.fn(),
+  logServerEvent: vi.fn(),
+  errorTypeOf: () => "Error",
+}));
+
+import { captureServerEvent, logServerEvent } from "@/services/posthog/server";
 import { createServerSupabaseClient } from "@/services/supabase/server";
 import { POST } from "./route";
 
@@ -41,6 +48,11 @@ function mockSupabase(options: {
 describe("POST /api/subscription/cancel", () => {
   beforeEach(() => {
     subscriptionsUpdateMock.mockReset();
+  });
+
+  beforeEach(() => {
+    vi.mocked(captureServerEvent).mockClear();
+    vi.mocked(logServerEvent).mockClear();
   });
 
   it("returns 401 when not authenticated", async () => {
@@ -92,6 +104,7 @@ describe("POST /api/subscription/cancel", () => {
 
     expect(supabase.__update).not.toHaveBeenCalled();
     expect(supabase.__upsert).not.toHaveBeenCalled();
+    expect(captureServerEvent).toHaveBeenCalledWith("user-1", "subscription_cancel_requested");
   });
 
   it("returns 500 with a generic message and logs the failure when the Polar API call fails", async () => {
@@ -110,6 +123,12 @@ describe("POST /api/subscription/cancel", () => {
     const body = await response.json();
     expect(body.error).toBeTypeOf("string");
     expect(body.error).not.toContain("not found");
+    expect(logServerEvent).toHaveBeenCalledWith(
+      "subscription cancel request failed",
+      "ERROR",
+      expect.objectContaining({ event: "subscription_cancel_failed", error_type: "Error" }),
+    );
+    expect(captureServerEvent).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       "Polar 구독 해지 요청 실패",
       expect.objectContaining({ userId: "user-1" }),

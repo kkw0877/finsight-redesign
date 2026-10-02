@@ -2,20 +2,9 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import posthog from "posthog-js";
+import { identifyFromUsageResponse } from "@/lib/analytics";
 import { Button, StatusIconCircle } from "@/components/ui";
 import styles from "./page.module.css";
-
-function identifyFromUsageResponse(response: Response) {
-  if (!process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN || !process.env.NEXT_PUBLIC_POSTHOG_HOST) {
-    return;
-  }
-
-  const userId = response.headers?.get("X-Finsight-PostHog-Distinct-Id");
-  if (!userId) return;
-
-  posthog.identify(userId);
-}
 
 export default function WelcomePage() {
   useEffect(() => {

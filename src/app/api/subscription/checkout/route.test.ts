@@ -13,6 +13,13 @@ vi.mock("@/services/polar/client", () => ({
   })),
 }));
 
+vi.mock("@/services/posthog/server", () => ({
+  captureServerEvent: vi.fn(),
+  logServerEvent: vi.fn(),
+  errorTypeOf: () => "Error",
+}));
+
+import { captureServerEvent, logServerEvent } from "@/services/posthog/server";
 import { createServerSupabaseClient } from "@/services/supabase/server";
 import { POST } from "./route";
 
@@ -33,6 +40,8 @@ function makeRequest(): NextRequest {
 describe("POST /api/subscription/checkout", () => {
   beforeEach(() => {
     checkoutsCreateMock.mockReset();
+    vi.mocked(captureServerEvent).mockClear();
+    vi.mocked(logServerEvent).mockClear();
     vi.stubEnv("POLAR_PRO_MONTHLY_PRODUCT_ID", "prod_test_123");
   });
 
@@ -65,6 +74,7 @@ describe("POST /api/subscription/checkout", () => {
         externalCustomerId: "user-1",
       }),
     );
+    expect(captureServerEvent).toHaveBeenCalledWith("user-1", "checkout_started");
   });
 
   it("returns 500 with a generic message and logs the failure when the Polar API call fails", async () => {
@@ -78,6 +88,15 @@ describe("POST /api/subscription/checkout", () => {
     const body = await response.json();
     expect(body.error).toBeTypeOf("string");
     expect(body.error).not.toContain("invalid product id");
+    expect(logServerEvent).toHaveBeenCalledWith(
+      "checkout creation failed",
+      "ERROR",
+      expect.objectContaining({ event: "checkout_failed", error_type: "Error" }),
+    );
+    expect(captureServerEvent).toHaveBeenCalledWith("user-1", "checkout_failed", {
+      reason: "polar_error",
+    });
+    expect(JSON.stringify(vi.mocked(logServerEvent).mock.calls)).not.toContain("invalid product id");
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       "Polar 체크아웃 생성 실패",
       expect.objectContaining({ userId: "user-1" }),

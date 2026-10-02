@@ -1,9 +1,16 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import BillingPage from "./page";
+import { trackEvent } from "@/lib/analytics";
 import type { CheckoutStartResponse } from "@/types/api";
 import type { UsageStatus } from "@/types/usage";
+
+vi.mock("@/lib/analytics", () => ({
+  trackEvent: vi.fn(),
+  resetAnalytics: vi.fn(),
+  identifyFromUsageResponse: vi.fn(),
+}));
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -29,6 +36,10 @@ function usageStatus(overrides: Partial<UsageStatus> = {}): UsageStatus {
 }
 
 describe("BillingPage", () => {
+  beforeEach(() => {
+    vi.mocked(trackEvent).mockClear();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -43,6 +54,7 @@ describe("BillingPage", () => {
     render(<BillingPage />);
 
     expect(await screen.findByRole("button", { name: /Pay ₩9,900/i })).toBeInTheDocument();
+    expect(trackEvent).toHaveBeenCalledWith("billing_plan_viewed");
   });
 
   it("shows the already-subscribed view when /api/usage reports an active subscription", async () => {
@@ -58,6 +70,7 @@ describe("BillingPage", () => {
     render(<BillingPage />);
 
     expect(await screen.findByText(/You're already subscribed/)).toBeInTheDocument();
+    expect(trackEvent).not.toHaveBeenCalledWith("billing_plan_viewed");
     expect(screen.getByText(/October 13, 2026/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Pay ₩9,900/i })).not.toBeInTheDocument();
   });

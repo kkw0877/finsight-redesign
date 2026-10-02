@@ -25,6 +25,16 @@ vi.mock("@/services/supabase/admin", () => ({
   })),
 }));
 
+vi.mock("@/services/posthog/server", () => ({
+  captureServerEvent: vi.fn(),
+  logServerEvent: vi.fn(),
+  errorTypeOf: (err: unknown) =>
+    typeof err === "object" && err !== null && typeof (err as { code?: unknown }).code === "string"
+      ? (err as { code: string }).code
+      : "unknown",
+}));
+
+import { captureServerEvent, logServerEvent } from "@/services/posthog/server";
 import { POST } from "./route";
 
 const TEST_USER = { id: "user-123" };
@@ -50,6 +60,8 @@ function makeMultipartRequest(fileName: string, byteLength: number): Request {
 
 describe("POST /api/upload", () => {
   beforeEach(() => {
+    vi.mocked(captureServerEvent).mockClear();
+    vi.mocked(logServerEvent).mockClear();
     getUserMock.mockReset();
     uploadMock.mockReset();
     removeMock.mockReset();
@@ -75,6 +87,9 @@ describe("POST /api/upload", () => {
     const body = await response.json();
     expect(body.error).toBeTypeOf("string");
     expect(uploadMock).not.toHaveBeenCalled();
+    expect(captureServerEvent).toHaveBeenCalledWith(TEST_USER.id, "upload_failed", {
+      reason: "unsupported_format",
+    });
   });
 
   it("rejects files larger than 20MB with 400", async () => {
@@ -83,6 +98,9 @@ describe("POST /api/upload", () => {
     const body = await response.json();
     expect(body.error).toBeTypeOf("string");
     expect(uploadMock).not.toHaveBeenCalled();
+    expect(captureServerEvent).toHaveBeenCalledWith(TEST_USER.id, "upload_failed", {
+      reason: "file_too_large",
+    });
   });
 
   it("accepts a valid .csv file, uploads to storage, inserts a pending job, and returns 200", async () => {
@@ -107,6 +125,13 @@ describe("POST /api/upload", () => {
     const expiresAt = new Date(insertedRow.file_expires_at).getTime();
     const expectedExpiry = Date.now() + 24 * 60 * 60 * 1000;
     expect(Math.abs(expiresAt - expectedExpiry)).toBeLessThan(5000);
+
+    // 파일명은 개인정보가 담길 수 있어 이벤트에 넣지 않는다 — 형식과 크기만 보낸다.
+    expect(captureServerEvent).toHaveBeenCalledWith(TEST_USER.id, "file_uploaded", {
+      file_type: "csv",
+      file_size_kb: 1,
+    });
+    expect(JSON.stringify(vi.mocked(captureServerEvent).mock.calls)).not.toContain("statement");
   });
 
   it("uses application/pdf content type for .pdf files", async () => {
@@ -119,13 +144,22 @@ describe("POST /api/upload", () => {
   });
 
   it("attempts storage cleanup and returns 500 with a generic message when the DB insert fails", async () => {
-    insertMock.mockResolvedValue({ data: null, error: { message: "db exploded" } });
+    insertMock.mockResolvedValue({ data: null, error: { message: "db exploded", code: "42501" } });
     const response = await POST(makeMultipartRequest("statement.csv", 20));
     expect(response.status).toBe(500);
     const body = await response.json();
     expect(body.error).toBeTypeOf("string");
     expect(body.error).not.toContain("db exploded");
     expect(removeMock).toHaveBeenCalledTimes(1);
+    expect(logServerEvent).toHaveBeenCalledWith(
+      "upload failed",
+      "ERROR",
+      expect.objectContaining({ event: "upload_failed", reason: "db_insert_error", error_type: "42501" }),
+    );
+    expect(captureServerEvent).toHaveBeenCalledWith(TEST_USER.id, "upload_failed", {
+      reason: "db_insert_error",
+    });
+    expect(JSON.stringify(vi.mocked(logServerEvent).mock.calls)).not.toContain("db exploded");
   });
 
   it("returns 500 with a generic message when the storage upload fails", async () => {
@@ -136,5 +170,13 @@ describe("POST /api/upload", () => {
     expect(body.error).toBeTypeOf("string");
     expect(body.error).not.toContain("bucket unreachable");
     expect(insertMock).not.toHaveBeenCalled();
+    expect(logServerEvent).toHaveBeenCalledWith(
+      "upload failed",
+      "ERROR",
+      expect.objectContaining({ event: "upload_failed", reason: "storage_upload_error" }),
+    );
+    expect(captureServerEvent).toHaveBeenCalledWith(TEST_USER.id, "upload_failed", {
+      reason: "storage_upload_error",
+    });
   });
 });

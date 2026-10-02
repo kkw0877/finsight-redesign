@@ -1,11 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import DashboardPage from "./page";
+import { resetAnalytics, trackEvent } from "@/lib/analytics";
 import type { AnalysisResult } from "@/types/analysis";
 import type { UsageStatus } from "@/types/usage";
 
 const pushMock = vi.fn();
+
+vi.mock("@/lib/analytics", () => ({
+  trackEvent: vi.fn(),
+  resetAnalytics: vi.fn(),
+  identifyFromUsageResponse: vi.fn(),
+}));
+
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
@@ -65,6 +73,8 @@ async function selectFileAndStartAnalysis() {
 describe("DashboardPage", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    vi.mocked(trackEvent).mockClear();
+    vi.mocked(resetAnalytics).mockClear();
   });
 
   afterEach(() => {
@@ -111,6 +121,82 @@ describe("DashboardPage", () => {
     expect(analysisStartCall).toBeDefined();
     const [, analysisStartInit] = analysisStartCall!;
     expect(JSON.parse(analysisStartInit!.body as string)).toEqual({ jobId: "job-1" });
+
+    // user-flow n15~n27: 파일 선택 → 분석 시작 → 결과 조회. 완료/실패는 서버가 기록하므로 여기서는 보내지 않는다.
+    expect(trackEvent).toHaveBeenCalledWith("file_selected", { file_type: "csv", file_size_kb: 1 });
+    expect(trackEvent).toHaveBeenCalledWith("analysis_started");
+    expect(trackEvent).toHaveBeenCalledWith("analysis_result_viewed", {
+      source: "completed",
+      category_count: 1,
+      anomaly_count: 0,
+      recommendation_count: 1,
+    });
+    expect(trackEvent).not.toHaveBeenCalledWith("analysis_completed", expect.anything());
+    expect(trackEvent).not.toHaveBeenCalledWith("analysis_completed");
+  });
+
+  it("지원하지 않는 파일 형식을 고르면 upload_validation_failed를 기록한다 (파일명은 보내지 않는다)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.endsWith("/api/usage")) return jsonResponse(baseUsage);
+        if (url.endsWith("/api/analysis/latest")) return jsonResponse({ error: "none" }, 404);
+        throw new Error(`Unexpected fetch call: ${url}`);
+      }),
+    );
+    render(<DashboardPage />);
+    await screen.findByText(/Upload your card statement/i);
+
+    const fileInput = screen.getByLabelText(/choose file/i);
+    fireEvent.change(fileInput, { target: { files: [makeFile("my-card-2026.txt")] } });
+
+    expect(trackEvent).toHaveBeenCalledWith("upload_validation_failed", {
+      reason: "unsupported_format",
+    });
+    expect(JSON.stringify(vi.mocked(trackEvent).mock.calls)).not.toContain("my-card");
+  });
+
+  it("이미 분석 결과가 있는 사용자가 재방문하면 analysis_result_viewed(source: returning)를 기록한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.endsWith("/api/usage")) return jsonResponse(baseUsage);
+        if (url.endsWith("/api/analysis/latest")) return jsonResponse(mockResult);
+        throw new Error(`Unexpected fetch call: ${url}`);
+      }),
+    );
+
+    render(<DashboardPage />);
+
+    await screen.findByText(/Card Statement Analysis/);
+    expect(trackEvent).toHaveBeenCalledWith("analysis_result_viewed", {
+      source: "returning",
+      category_count: 1,
+      anomaly_count: 0,
+      recommendation_count: 1,
+    });
+  });
+
+  it("잔여 횟수가 없는 상태에서 분석을 시작하면 analysis_limit_reached(client)를 기록하고 결제로 보낸다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.endsWith("/api/usage")) {
+          return jsonResponse({ ...baseUsage, freeUsedCount: 2, freeRemaining: 0 });
+        }
+        if (url.endsWith("/api/analysis/latest")) return jsonResponse({ error: "none" }, 404);
+        throw new Error(`Unexpected fetch call: ${url}`);
+      }),
+    );
+
+    await selectFileAndStartAnalysis();
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/billing"));
+    expect(trackEvent).toHaveBeenCalledWith("analysis_limit_reached", { source: "client" });
+    expect(trackEvent).not.toHaveBeenCalledWith("analysis_started");
   });
 
   it("redirects to /billing when /api/analysis/start returns 402", async () => {
@@ -167,5 +253,7 @@ describe("DashboardPage", () => {
       expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", { method: "POST" }),
     );
     expect(pushMock).toHaveBeenCalledWith("/");
+    expect(trackEvent).toHaveBeenCalledWith("user_logged_out");
+    expect(resetAnalytics).toHaveBeenCalled();
   });
 });

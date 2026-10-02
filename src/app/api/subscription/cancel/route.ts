@@ -1,6 +1,7 @@
 import type { CancelResponse } from "@/types/api";
 import { createServerSupabaseClient } from "@/services/supabase/server";
 import { createPolarClient } from "@/services/polar/client";
+import { captureServerEvent, errorTypeOf, logServerEvent } from "@/services/posthog/server";
 
 const GENERIC_ERROR_MESSAGE = "구독 해지 요청 중 문제가 발생했습니다";
 
@@ -37,6 +38,8 @@ export async function POST() {
       subscriptionUpdate: { cancelAtPeriodEnd: true },
     });
 
+    await captureServerEvent(user.id, "subscription_cancel_requested");
+
     const response: CancelResponse = {
       subscriptionStatus: "cancel_scheduled",
       currentPeriodEnd: new Date(updated.currentPeriodEnd).toISOString(),
@@ -46,6 +49,10 @@ export async function POST() {
     // 결제 실패는 반드시 로깅한다(OWASP A09:2025) — 취소 요청이 조용히 실패하면 운영팀이
     // 감지할 방법이 없다.
     console.error("Polar 구독 해지 요청 실패", { userId: user.id, err });
+    logServerEvent("subscription cancel request failed", "ERROR", {
+      event: "subscription_cancel_failed",
+      error_type: errorTypeOf(err),
+    });
     return Response.json({ error: GENERIC_ERROR_MESSAGE }, { status: 500 });
   }
 }

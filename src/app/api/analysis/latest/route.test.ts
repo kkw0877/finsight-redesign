@@ -5,6 +5,13 @@ vi.mock("@/services/supabase/server", () => ({
   createServerSupabaseClient: vi.fn(),
 }));
 
+vi.mock("@/services/posthog/server", () => ({
+  captureServerEvent: vi.fn(),
+  logServerEvent: vi.fn(),
+  errorTypeOf: () => "Error",
+}));
+
+import { logServerEvent } from "@/services/posthog/server";
 import { createServerSupabaseClient } from "@/services/supabase/server";
 import { GET } from "./route";
 
@@ -78,5 +85,11 @@ describe("GET /api/analysis/latest", () => {
     const body = await response.json();
     expect(body.error).toBeTypeOf("string");
     expect(body.error).not.toContain("connection refused");
+    expect(logServerEvent).toHaveBeenCalledWith(
+      "latest analysis query failed",
+      "ERROR",
+      expect.objectContaining({ event: "analysis_latest_failed", error_type: "Error" }),
+    );
+    expect(JSON.stringify(vi.mocked(logServerEvent).mock.calls)).not.toContain("connection refused");
   });
 });

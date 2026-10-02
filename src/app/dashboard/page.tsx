@@ -3,7 +3,7 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import posthog from "posthog-js";
+import { identifyFromUsageResponse, resetAnalytics, trackEvent } from "@/lib/analytics";
 import {
   Badge,
   Button,
@@ -56,15 +56,14 @@ function formatFileSize(bytes: number): string {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
-function identifyFromUsageResponse(response: Response) {
-  if (!process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN || !process.env.NEXT_PUBLIC_POSTHOG_HOST) {
-    return;
-  }
-
-  const userId = response.headers?.get("X-Finsight-PostHog-Distinct-Id");
-  if (!userId) return;
-
-  posthog.identify(userId);
+// 결과 화면이 실제로 보여진 시점 — "분석 결과 조회율" KPI(prd.md). 금액·가맹점 등 내용은 보내지 않는다.
+function trackResultViewed(source: "completed" | "returning", result: AnalysisResult) {
+  trackEvent("analysis_result_viewed", {
+    source,
+    category_count: result.categoryBreakdown.length,
+    anomaly_count: result.anomalies.length,
+    recommendation_count: result.recommendations.length,
+  });
 }
 
 export default function DashboardPage() {
@@ -110,6 +109,7 @@ export default function DashboardPage() {
         if (active && data) {
           setAnalysisResult(data);
           setView("result");
+          trackResultViewed("returning", data);
         }
       })
       .catch(() => {});
@@ -139,12 +139,20 @@ export default function DashboardPage() {
 
     const hasValidExtension = /\.(csv|pdf)$/i.test(file.name);
     if (!hasValidExtension || file.size > MAX_FILE_SIZE) {
+      trackEvent("upload_validation_failed", {
+        reason: hasValidExtension ? "file_too_large" : "unsupported_format",
+      });
       setSelectedFile(null);
       setUploadErrorMessage(DEFAULT_UPLOAD_ERROR_MESSAGE);
       setView("upload-error");
       return;
     }
 
+    // 파일명은 개인정보가 담길 수 있어 보내지 않는다 — 형식과 크기만 기록한다.
+    trackEvent("file_selected", {
+      file_type: /\.pdf$/i.test(file.name) ? "pdf" : "csv",
+      file_size_kb: Math.max(1, Math.round(file.size / 1024)),
+    });
     setSelectedFile(file);
     setView("file-selected");
   }
@@ -153,12 +161,7 @@ export default function DashboardPage() {
     if (!selectedFile) return;
 
     if (hasNoRemainingAnalyses) {
-      if (
-        process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
-        process.env.NEXT_PUBLIC_POSTHOG_HOST
-      ) {
-        posthog.capture("analysis_limit_reached");
-      }
+      trackEvent("analysis_limit_reached", { source: "client" });
       router.push("/billing");
       return;
     }
@@ -170,6 +173,7 @@ export default function DashboardPage() {
     try {
       uploadResponse = await fetch("/api/upload", { method: "POST", body: formData });
     } catch {
+      trackEvent("upload_failed", { reason: "network" });
       setAnalysisErrorMessage(DEFAULT_ANALYSIS_ERROR_MESSAGE);
       setView("analysis-error");
       return;
@@ -190,6 +194,7 @@ export default function DashboardPage() {
     }
 
     setView("analyzing");
+    trackEvent("analysis_started");
 
     let analysisResponse: Response;
     try {
@@ -199,6 +204,8 @@ export default function DashboardPage() {
         body: JSON.stringify({ jobId: uploadResult.jobId } satisfies AnalysisStartRequestBody),
       });
     } catch {
+      // 서버까지 닿지 못한 실패는 서버 이벤트(analysis_failed)에 잡히지 않는다.
+      trackEvent("analysis_request_failed", { reason: "network" });
       setAnalysisErrorMessage(DEFAULT_ANALYSIS_ERROR_MESSAGE);
       setView("analysis-error");
       return;
@@ -206,12 +213,8 @@ export default function DashboardPage() {
 
     if (analysisResponse.status === 200) {
       const result: AnalysisResult = await analysisResponse.json();
-      if (
-        process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
-        process.env.NEXT_PUBLIC_POSTHOG_HOST
-      ) {
-        posthog.capture("analysis_completed");
-      }
+      // 분석 완료/실패는 서버(/api/analysis/start)가 기록한다 — 탭을 닫아도 유실되지 않는다.
+      trackResultViewed("completed", result);
       setAnalysisResult(result);
       setView("result");
       refreshUsage();
@@ -236,13 +239,9 @@ export default function DashboardPage() {
   async function handleLogout() {
     try {
       const response = await fetch("/api/auth/logout", { method: "POST" });
-      if (
-        response.ok &&
-        process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
-        process.env.NEXT_PUBLIC_POSTHOG_HOST
-      ) {
-        posthog.capture("user_logged_out");
-        posthog.reset();
+      if (response.ok) {
+        trackEvent("user_logged_out");
+        resetAnalytics();
       }
     } catch {
       // 로그아웃 실패해도 사용자를 랜딩으로 보낸다 — 세션이 남아있어도 다음 보호 화면

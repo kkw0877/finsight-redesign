@@ -1,5 +1,6 @@
 import type { AnalysisResult } from "@/types/analysis";
 import { createServerSupabaseClient } from "@/services/supabase/server";
+import { errorTypeOf, logServerEvent } from "@/services/posthog/server";
 
 interface AnalysisResultRow {
   summary: AnalysisResult["summary"];
@@ -45,7 +46,11 @@ export async function GET() {
     }
 
     return Response.json(toAnalysisResult(data), { status: 200 });
-  } catch {
+  } catch (err) {
+    logServerEvent("latest analysis query failed", "ERROR", {
+      event: "analysis_latest_failed",
+      error_type: errorTypeOf(err),
+    });
     return Response.json(
       { error: "조회 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요" },
       { status: 500 },

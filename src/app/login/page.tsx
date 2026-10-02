@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import posthog from "posthog-js";
+import { trackEvent } from "@/lib/analytics";
 import { GoogleButton, Spinner } from "@/components/ui";
 import styles from "./page.module.css";
 
@@ -25,14 +25,14 @@ function LoginForm() {
   const errorParam = searchParams.get("error");
   const errorMessage = errorParam ? ERROR_MESSAGES[errorParam] ?? ERROR_MESSAGES.oauth_failed : null;
 
+  // user-flow n8(No): 소셜 인증 실패로 로그인 화면에 되돌아온 경우
+  useEffect(() => {
+    if (errorParam) trackEvent("google_sign_in_failed", { reason: errorParam });
+  }, [errorParam]);
+
   function handleSignIn() {
     setLoading(true);
-    if (
-      process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
-      process.env.NEXT_PUBLIC_POSTHOG_HOST
-    ) {
-      posthog.capture("google_sign_in_started");
-    }
+    trackEvent("google_sign_in_started");
     window.location.href = "/api/auth/google";
   }
 

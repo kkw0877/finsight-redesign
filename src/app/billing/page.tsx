@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import posthog from "posthog-js";
+import { identifyFromUsageResponse, trackEvent } from "@/lib/analytics";
 import { Button, SectionCard, Spinner, StatusIconCircle } from "@/components/ui";
 import styles from "./page.module.css";
 import type { CheckoutStartResponse } from "@/types/api";
@@ -26,17 +26,6 @@ function formatDate(isoDate: string): string {
   });
 }
 
-function identifyFromUsageResponse(response: Response) {
-  if (!process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN || !process.env.NEXT_PUBLIC_POSTHOG_HOST) {
-    return;
-  }
-
-  const userId = response.headers?.get("X-Finsight-PostHog-Distinct-Id");
-  if (!userId) return;
-
-  posthog.identify(userId);
-}
-
 export default function BillingPage() {
   const [view, setView] = useState<BillingView>("loading");
   const [usage, setUsage] = useState<UsageStatus | null>(null);
@@ -58,10 +47,14 @@ export default function BillingPage() {
           setView("subscribed");
         } else {
           setView("plan");
+          trackEvent("billing_plan_viewed");
         }
       })
       .catch(() => {
-        if (active) setView("plan");
+        if (active) {
+          setView("plan");
+          trackEvent("billing_plan_viewed");
+        }
       });
 
     return () => {
@@ -80,12 +73,7 @@ export default function BillingPage() {
         return;
       }
       const { checkoutUrl } = data as CheckoutStartResponse;
-      if (
-        process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
-        process.env.NEXT_PUBLIC_POSTHOG_HOST
-      ) {
-        posthog.capture("checkout_started");
-      }
+      // checkout_started는 서버(/api/subscription/checkout)가 기록한다.
       window.location.href = checkoutUrl;
     } catch {
       setErrorMessage(GENERIC_ERROR_MESSAGE);

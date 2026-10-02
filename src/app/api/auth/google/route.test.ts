@@ -11,6 +11,13 @@ vi.mock("@/services/supabase/server", () => ({
   })),
 }));
 
+vi.mock("@/services/posthog/server", () => ({
+  captureServerEvent: vi.fn(),
+  logServerEvent: vi.fn(),
+  errorTypeOf: () => "Error",
+}));
+
+import { logServerEvent } from "@/services/posthog/server";
 import { GET } from "./route";
 
 function makeRequest(): NextRequest {
@@ -20,6 +27,7 @@ function makeRequest(): NextRequest {
 describe("GET /api/auth/google", () => {
   beforeEach(() => {
     signInWithOAuthMock.mockReset();
+    vi.mocked(logServerEvent).mockClear();
   });
 
   it("구글 인증 URL로 리다이렉트한다", async () => {
@@ -55,6 +63,11 @@ describe("GET /api/auth/google", () => {
     const location = response.headers.get("location");
     expect(location).toContain("/login?error=oauth_failed");
     expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(logServerEvent).toHaveBeenCalledWith(
+      "google oauth start failed",
+      "ERROR",
+      expect.objectContaining({ event: "oauth_start_failed", reason: "supabase_error" }),
+    );
 
     consoleErrorSpy.mockRestore();
   });
@@ -69,6 +82,11 @@ describe("GET /api/auth/google", () => {
     const location = response.headers.get("location");
     expect(location).toContain("/login?error=oauth_failed");
     expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(logServerEvent).toHaveBeenCalledWith(
+      "google oauth start failed",
+      "ERROR",
+      expect.objectContaining({ event: "oauth_start_failed", reason: "exception" }),
+    );
 
     consoleErrorSpy.mockRestore();
   });

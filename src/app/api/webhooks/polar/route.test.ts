@@ -11,6 +11,13 @@ vi.mock("@polar-sh/sdk/webhooks", async () => {
   return { ...actual, validateEvent: vi.fn() };
 });
 
+vi.mock("@/services/posthog/server", () => ({
+  captureServerEvent: vi.fn(),
+  logServerEvent: vi.fn(),
+  errorTypeOf: () => "Error",
+}));
+
+import { captureServerEvent, logServerEvent } from "@/services/posthog/server";
 import { createAdminSupabaseClient } from "@/services/supabase/admin";
 import { validateEvent, WebhookVerificationError } from "@polar-sh/sdk/webhooks";
 import { POST } from "./route";
@@ -124,6 +131,8 @@ describe("POST /api/webhooks/polar", () => {
   beforeEach(() => {
     vi.stubEnv("POLAR_WEBHOOK_SECRET", "whsec_test");
     vi.mocked(validateEvent).mockReset();
+    vi.mocked(captureServerEvent).mockClear();
+    vi.mocked(logServerEvent).mockClear();
   });
 
   afterEach(() => {
@@ -146,6 +155,12 @@ describe("POST /api/webhooks/polar", () => {
       "Polar 웹훅 서명 검증 실패",
       expect.objectContaining({ webhookId: "evt_forged_1" }),
     );
+    expect(logServerEvent).toHaveBeenCalledWith(
+      "polar webhook signature verification failed",
+      "ERROR",
+      expect.objectContaining({ event: "polar_webhook_signature_failed" }),
+    );
+    expect(captureServerEvent).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
   });
@@ -169,6 +184,7 @@ describe("POST /api/webhooks/polar", () => {
       expect.objectContaining({ user_id: "user-1", status: "active" }),
       expect.objectContaining({ onConflict: "user_id" }),
     );
+    expect(captureServerEvent).toHaveBeenCalledWith("user-1", "subscription_activated");
   });
 
   it("does not write to subscriptions again when the same event id is replayed", async () => {
@@ -186,6 +202,7 @@ describe("POST /api/webhooks/polar", () => {
     expect(admin.webhookEvents.insert).not.toHaveBeenCalled();
     expect(admin.subscriptions.upsert).not.toHaveBeenCalled();
     expect(admin.subscriptions.update).not.toHaveBeenCalled();
+    expect(captureServerEvent).not.toHaveBeenCalled();
   });
 
   it("sets status to cancel_scheduled on subscription.canceled", async () => {
@@ -200,6 +217,7 @@ describe("POST /api/webhooks/polar", () => {
       expect.objectContaining({ user_id: "user-1", status: "cancel_scheduled" }),
       expect.objectContaining({ onConflict: "user_id" }),
     );
+    expect(captureServerEvent).toHaveBeenCalledWith("user-1", "subscription_cancel_scheduled");
   });
 
   it("sets status to inactive on subscription.revoked", async () => {
@@ -214,6 +232,7 @@ describe("POST /api/webhooks/polar", () => {
       expect.objectContaining({ status: "inactive" }),
     );
     expect(admin.subscriptions.eqAfterUpdate).toHaveBeenCalledWith("user_id", "user-1");
+    expect(captureServerEvent).toHaveBeenCalledWith("user-1", "subscription_revoked");
   });
 
   it("records the event but does not touch subscriptions for a type outside the mapping table", async () => {
@@ -230,6 +249,8 @@ describe("POST /api/webhooks/polar", () => {
     });
     expect(admin.subscriptions.upsert).not.toHaveBeenCalled();
     expect(admin.subscriptions.update).not.toHaveBeenCalled();
+    // 갱신 결제 실패는 구독 상태는 건드리지 않되 이탈 신호로 기록한다.
+    expect(captureServerEvent).toHaveBeenCalledWith("user-1", "subscription_payment_failed");
   });
 
   it("does not write to subscriptions when the correlated user cannot be found", async () => {
@@ -244,6 +265,12 @@ describe("POST /api/webhooks/polar", () => {
     expect(admin.subscriptions.upsert).not.toHaveBeenCalled();
     expect(admin.subscriptions.update).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(captureServerEvent).not.toHaveBeenCalled();
+    expect(logServerEvent).toHaveBeenCalledWith(
+      "polar webhook missing external customer id",
+      "ERROR",
+      expect.objectContaining({ event: "polar_webhook_unlinked_customer" }),
+    );
 
     consoleErrorSpy.mockRestore();
   });

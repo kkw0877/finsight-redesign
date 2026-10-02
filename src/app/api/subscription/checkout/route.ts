@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import type { CheckoutStartResponse } from "@/types/api";
 import { createServerSupabaseClient } from "@/services/supabase/server";
 import { createPolarClient } from "@/services/polar/client";
+import { captureServerEvent, errorTypeOf, logServerEvent } from "@/services/posthog/server";
 
 const GENERIC_ERROR_MESSAGE = "결제를 시작할 수 없습니다. 잠시 후 다시 시도해 주세요";
 
@@ -30,12 +31,20 @@ export async function POST(request: NextRequest) {
       externalCustomerId: user.id,
     });
 
+    // 결제 시작은 서버에서 기록한다 — 곧바로 외부 결제 화면으로 이동하므로 브라우저 이벤트는 유실되기 쉽다.
+    await captureServerEvent(user.id, "checkout_started");
+
     const response: CheckoutStartResponse = { checkoutUrl: checkout.url };
     return Response.json(response, { status: 200 });
   } catch (err) {
     // 결제 실패는 반드시 로깅한다 — 그렇지 않으면 상품 ID 오설정 등으로 신규 구독이 전부
     // 막혀도 운영팀이 감지할 방법이 없다(OWASP A09:2025).
     console.error("Polar 체크아웃 생성 실패", { userId: user.id, err });
+    logServerEvent("checkout creation failed", "ERROR", {
+      event: "checkout_failed",
+      error_type: errorTypeOf(err),
+    });
+    await captureServerEvent(user.id, "checkout_failed", { reason: "polar_error" });
     return Response.json({ error: GENERIC_ERROR_MESSAGE }, { status: 500 });
   }
 }

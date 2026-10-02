@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validateEvent, WebhookVerificationError } from "@polar-sh/sdk/webhooks";
 import { createAdminSupabaseClient } from "@/services/supabase/admin";
+import { captureServerEvent, errorTypeOf, logServerEvent } from "@/services/posthog/server";
 
 const GENERIC_ERROR_MESSAGE = "웹훅을 처리할 수 없습니다";
 
@@ -31,6 +32,9 @@ export async function POST(request: NextRequest) {
       // 로깅해야 한다(OWASP A09:2025).
       console.error("Polar 웹훅 서명 검증 실패", {
         webhookId: request.headers.get("webhook-id"),
+      });
+      logServerEvent("polar webhook signature verification failed", "ERROR", {
+        event: "polar_webhook_signature_failed",
       });
       return Response.json({ error: "서명 검증에 실패했습니다" }, { status: 401 });
     }
@@ -98,6 +102,11 @@ export async function POST(request: NextRequest) {
     return Response.json({ received: true }, { status: 200 });
   } catch (err) {
     console.error("Polar 웹훅 처리 중 오류", err);
+    logServerEvent("polar webhook processing failed", "ERROR", {
+      event: "polar_webhook_processing_failed",
+      webhook_type: eventType,
+      error_type: errorTypeOf(err),
+    });
     return Response.json({ error: GENERIC_ERROR_MESSAGE }, { status: 500 });
   }
 }
@@ -110,6 +119,10 @@ async function applySubscriptionUpdate(admin: SupabaseClient, event: PolarEvent)
         console.error(
           `subscription.active: customer.externalId가 없습니다 (subscription ${event.data.id})`,
         );
+        logServerEvent("polar webhook missing external customer id", "ERROR", {
+          event: "polar_webhook_unlinked_customer",
+          webhook_type: "subscription.active",
+        });
         return;
       }
       const { error } = await admin.from("subscriptions").upsert(
@@ -125,6 +138,7 @@ async function applySubscriptionUpdate(admin: SupabaseClient, event: PolarEvent)
         { onConflict: "user_id" },
       );
       if (error) throw error;
+      await captureServerEvent(userId, "subscription_activated");
       return;
     }
     case "subscription.canceled": {
@@ -133,6 +147,10 @@ async function applySubscriptionUpdate(admin: SupabaseClient, event: PolarEvent)
         console.error(
           `subscription.canceled: customer.externalId가 없습니다 (subscription ${event.data.id})`,
         );
+        logServerEvent("polar webhook missing external customer id", "ERROR", {
+          event: "polar_webhook_unlinked_customer",
+          webhook_type: "subscription.canceled",
+        });
         return;
       }
       const { error } = await admin.from("subscriptions").upsert(
@@ -148,6 +166,7 @@ async function applySubscriptionUpdate(admin: SupabaseClient, event: PolarEvent)
         { onConflict: "user_id" },
       );
       if (error) throw error;
+      await captureServerEvent(userId, "subscription_cancel_scheduled");
       return;
     }
     case "subscription.revoked": {
@@ -156,6 +175,10 @@ async function applySubscriptionUpdate(admin: SupabaseClient, event: PolarEvent)
         console.error(
           `subscription.revoked: customer.externalId가 없습니다 (subscription ${event.data.id})`,
         );
+        logServerEvent("polar webhook missing external customer id", "ERROR", {
+          event: "polar_webhook_unlinked_customer",
+          webhook_type: "subscription.revoked",
+        });
         return;
       }
       const { error } = await admin
@@ -163,6 +186,7 @@ async function applySubscriptionUpdate(admin: SupabaseClient, event: PolarEvent)
         .update({ status: "inactive", updated_at: new Date().toISOString() })
         .eq("user_id", userId);
       if (error) throw error;
+      await captureServerEvent(userId, "subscription_revoked");
       return;
     }
     case "subscription.updated": {
@@ -171,6 +195,10 @@ async function applySubscriptionUpdate(admin: SupabaseClient, event: PolarEvent)
         console.error(
           `subscription.updated: customer.externalId가 없습니다 (subscription ${event.data.id})`,
         );
+        logServerEvent("polar webhook missing external customer id", "ERROR", {
+          event: "polar_webhook_unlinked_customer",
+          webhook_type: "subscription.updated",
+        });
         return;
       }
       // 구독 row가 이미 있을 때만 의미가 있다 — 없으면 0건 업데이트로 조용히 무시된다.
@@ -185,8 +213,14 @@ async function applySubscriptionUpdate(admin: SupabaseClient, event: PolarEvent)
       if (error) throw error;
       return;
     }
+    case "subscription.past_due": {
+      // 갱신 결제 실패 — 구독 상태는 바꾸지 않고(상태 매핑은 ADR-012) 이탈 신호만 기록한다.
+      const userId = event.data.customer.externalId;
+      if (userId) await captureServerEvent(userId, "subscription_payment_failed");
+      return;
+    }
     default:
-      // subscription.created/uncanceled/past_due 등 표에 없는 모든 타입 — 상태를 바꾸지 않는다.
+      // subscription.created/uncanceled 등 표에 없는 모든 타입 — 상태를 바꾸지 않는다.
       return;
   }
 }

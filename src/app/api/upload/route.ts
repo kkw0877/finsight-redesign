@@ -1,6 +1,7 @@
 import type { UploadResponse } from "@/types/api";
 import { createServerSupabaseClient } from "@/services/supabase/server";
 import { createAdminSupabaseClient } from "@/services/supabase/admin";
+import { captureServerEvent, errorTypeOf, logServerEvent } from "@/services/posthog/server";
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const UNSUPPORTED_FORMAT_MESSAGE =
@@ -51,10 +52,12 @@ export async function POST(request: Request) {
     const file = formData.get("file");
 
     if (!isUploadedFile(file) || !hasSupportedExtension(file.name)) {
+      await captureServerEvent(user.id, "upload_failed", { reason: "unsupported_format" });
       return Response.json({ error: UNSUPPORTED_FORMAT_MESSAGE }, { status: 400 });
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
+      await captureServerEvent(user.id, "upload_failed", { reason: "file_too_large" });
       return Response.json({ error: UNSUPPORTED_FORMAT_MESSAGE }, { status: 400 });
     }
 
@@ -69,6 +72,13 @@ export async function POST(request: Request) {
       .upload(storagePath, file, { contentType });
 
     if (uploadError) {
+      logServerEvent("upload failed", "ERROR", {
+        event: "upload_failed",
+        reason: "storage_upload_error",
+        error_type: errorTypeOf(uploadError),
+        job_id: jobId,
+      });
+      await captureServerEvent(user.id, "upload_failed", { reason: "storage_upload_error" });
       return Response.json({ error: GENERIC_ERROR_MESSAGE }, { status: 500 });
     }
 
@@ -89,8 +99,20 @@ export async function POST(request: Request) {
       } catch {
         // best-effort cleanup; ignore failures and still report the original error below
       }
+      logServerEvent("upload failed", "ERROR", {
+        event: "upload_failed",
+        reason: "db_insert_error",
+        error_type: errorTypeOf(insertError),
+        job_id: jobId,
+      });
+      await captureServerEvent(user.id, "upload_failed", { reason: "db_insert_error" });
       return Response.json({ error: GENERIC_ERROR_MESSAGE }, { status: 500 });
     }
+
+    await captureServerEvent(user.id, "file_uploaded", {
+      file_type: fileType,
+      file_size_kb: Math.max(1, Math.round(file.size / 1024)),
+    });
 
     const response: UploadResponse = {
       jobId,

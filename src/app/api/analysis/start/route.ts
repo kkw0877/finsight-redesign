@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { after } from "next/server";
-import { emitPostHogLog, flushPostHogLogs } from "@/instrumentation";
 import type { AnalysisResult } from "@/types/analysis";
 import type { AnalysisStartRequestBody, AnalysisStartResponseError } from "@/types/api";
 import { createServerSupabaseClient } from "@/services/supabase/server";
@@ -9,6 +7,7 @@ import { createClaudeClient } from "@/services/claude/client";
 import { extractTransactions } from "@/services/claude/extractTransactions";
 import { analyzeSpending } from "@/services/claude/analyzeSpending";
 import { consumeOneAnalysis, getUsageStatus } from "@/lib/usage";
+import { captureServerEvent, errorTypeOf, logServerEvent } from "@/services/posthog/server";
 
 export const maxDuration = 300;
 
@@ -33,6 +32,8 @@ function errorResponse(message: string, status: number): Response {
   const body: AnalysisStartResponseError = { error: message };
   return Response.json(body, { status });
 }
+
+type FailureStage = "storage" | "extraction" | "analysis" | "save";
 
 function buildEmptyAnalysis(): Omit<AnalysisResult, "generatedAt"> {
   const today = new Date().toISOString().slice(0, 10);
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
     // F-ILHNGA/ADR-017: 잔여 횟수 확인
     const usageStatus = await getUsageStatus(admin, user.id);
     if (usageStatus.freeRemaining + usageStatus.subscriptionRemaining <= 0) {
+      await captureServerEvent(user.id, "analysis_limit_reached", { source: "server" });
       return errorResponse("무료/구독 분석 횟수를 모두 사용했습니다", 402);
     }
 
@@ -127,9 +129,12 @@ export async function POST(request: Request) {
       throw markProcessingError;
     }
 
-    emitPostHogLog("analysis processing started", "INFO", {
+    const startedAt = Date.now();
+    let stage: FailureStage = "storage";
+    logServerEvent("analysis processing started", "INFO", {
       event: "analysis_processing_started",
       source_file_type: job.source_file_type,
+      job_id: jobId,
     });
 
     try {
@@ -153,6 +158,7 @@ export async function POST(request: Request) {
       let transactions: Awaited<ReturnType<typeof extractTransactions>>;
       let analysis: Awaited<ReturnType<typeof analyzeSpending>>;
       try {
+        stage = "extraction";
         transactions = await extractTransactions({
           client: claude,
           signedUrl: signedUrlData.signedUrl,
@@ -160,6 +166,7 @@ export async function POST(request: Request) {
           observability,
         });
 
+        stage = "analysis";
         // F-BLDQBC: 분석 대상 거래가 없으면 억지로 추천을 만들지 않고 빈 결과로 처리(정상 완료)
         analysis =
           transactions.length === 0
@@ -169,6 +176,7 @@ export async function POST(request: Request) {
         await posthog?.shutdown();
       }
 
+      stage = "save";
       const generatedAt = new Date().toISOString();
       const result: AnalysisResult = { ...analysis, generatedAt };
 
@@ -199,17 +207,26 @@ export async function POST(request: Request) {
       // 정상 완료된 분석에 대해서만 차감 (F-ILHNGA)
       await consumeOneAnalysis(admin, user.id);
 
-      emitPostHogLog("analysis processing completed", "INFO", {
+      const durationMs = Date.now() - startedAt;
+      logServerEvent("analysis processing completed", "INFO", {
         event: "analysis_processing_completed",
         source_file_type: job.source_file_type,
         has_transactions: transactions.length > 0,
+        job_id: jobId,
+        duration_ms: durationMs,
       });
-      after(async () => {
-        await flushPostHogLogs();
+      // 거래 내용(가맹점명·금액)은 보내지 않고 개수만 보낸다.
+      await captureServerEvent(user.id, "analysis_completed", {
+        file_type: job.source_file_type,
+        transaction_count: transactions.length,
+        category_count: result.categoryBreakdown.length,
+        anomaly_count: result.anomalies.length,
+        recommendation_count: result.recommendations.length,
+        duration_ms: durationMs,
       });
 
       return Response.json(result, { status: 200 });
-    } catch {
+    } catch (err) {
       try {
         await admin
           .from("analysis_jobs")
@@ -223,12 +240,21 @@ export async function POST(request: Request) {
       } catch {
         // best-effort — 다음 요청의 lazy 재수거가 최종 안전장치다 (ADR-017)
       }
-      emitPostHogLog("analysis processing failed", "ERROR", {
+      const durationMs = Date.now() - startedAt;
+      const errorType = errorTypeOf(err);
+      logServerEvent("analysis processing failed", "ERROR", {
         event: "analysis_processing_failed",
         source_file_type: job.source_file_type,
+        job_id: jobId,
+        stage,
+        error_type: errorType,
+        duration_ms: durationMs,
       });
-      after(async () => {
-        await flushPostHogLogs();
+      await captureServerEvent(user.id, "analysis_failed", {
+        file_type: job.source_file_type,
+        stage,
+        error_type: errorType,
+        duration_ms: durationMs,
       });
       return errorResponse(GENERIC_ERROR_MESSAGE, 500);
     }
