@@ -316,3 +316,34 @@ Compute로 300초까지 확보하면 대부분의 카드 내역서 처리는 충
 `maxDuration`을 재조정해야 할 수 있다. 세분화된 진행 상태("추출 중"/"분석 중")를 화면에 보여줄
 수 없고 단일 스피너로만 표시된다 — 추후 필요해지면 스트리밍 응답(SSE)으로 개선할 수 있다.
 사용량이 늘어 실제로 타임아웃이 잦아지면 이 ADR을 재검토하고 비동기로 다시 전환해야 한다.
+
+---
+
+### ADR-018: prod alert 1차 방어선 — 웹훅(문) + CI 헤드리스 에이전트(두뇌) + GitHub Issue(escalation)
+
+**결정**: PostHog error tracking alert(단건 created/reopened + 급증 spiking)는 `POST /api/webhooks/posthog`가
+받는다. 이 라우트는 ① 공유 시크릿(`Authorization: Bearer`) 검증 ② `webhook_events`에 `posthog:<event_id>`를
+선삽입해 멱등 보장 ③ GitHub `repository_dispatch`로 CI에 위임 — 여기까지만 한다(서버리스는 `claude -p`를
+띄울 수 없다). dispatch 실패 시 선삽입 row를 지우고 502를 돌려 PostHog 재시도가 중복으로 버려지지 않게 한다.
+실제 판정은 `.github/workflows/oncall-alert-triage.yml`(헤드리스 에이전트, 읽기 전용)이 하고, 노이즈는 job
+summary+artifact에 기록만, 신호는 분석 포함 GitHub Issue로 escalation한다. 같은 PostHog issue는
+`oncall:<hash>` 라벨로 dedup해 열린 이슈에 코멘트한다.
+
+**정책은 코드가 강제한다**(`scripts/oncall/triage.mjs`): 판정 실패/누락은 신호(낮음)로 처리(fail-closed),
+spiking·유저 2명 이상·핵심 경로는 노이즈로 낮출 수 없고, 노이즈 확신도 낮음은 신호+낮음. 에이전트는
+네트워크·시크릿·gh 권한이 없고 `verdict.json`만 쓴다. 영향 통계는 결정적 step이 PostHog에서 읽기 전용으로
+가져온다(`scripts/oncall/posthog-stats.mjs`, 실패 시 확신도만 낮춤).
+
+**에이전트 격리**: alert 문자열은 공개 PostHog 토큰으로 누구나 만들 수 있어 프롬프트 인젝션을 전제로 한다.
+신뢰 스크립트는 에이전트 실행 전 `$RUNNER_TEMP`로 복사해 뒤 step이 복사본만 실행하고, 에이전트의 Write는
+`verdict.json` 한 파일로 제한하며, checkout 자격증명은 남기지 않고, `GH_TOKEN`/PostHog 키는 필요한 step에만
+준다. 이슈 본문에 실리는 에이전트 문자열은 @멘션·링크를 무력화하고, 시크릿 유사 문자열이 남으면 던지지 않고
+최소 본문으로 대체해 escalation을 유지한다. (잔여 위험: 에이전트가 프로세스 환경을 읽을 수 있으므로
+`ANTHROPIC_API_KEY` 노출 가능성은 남는다 — 출력은 redact를 거치지만 완전하지 않다.)
+
+**이유**: 새 인프라(큐, 별도 멱등 테이블, 슬랙 앱) 없이 이미 있는 것(Supabase `webhook_events`, GitHub Issues/Actions)만
+쓴다 — ADR 철학. escalation 채널은 레포에 설정된 것이 GitHub Issues뿐이라 이를 택했다.
+
+**트레이드오프**: PostHog 웹훅 destination은 HMAC 서명이 없어 정적 시크릿 비교다(로테이션 필요). `webhook_events`는
+Polar와 같은 테이블을 id 접두사로 공유한다. GitHub Issue 알림은 전화 호출급 page가 아니다(assign + 모바일 푸시/이메일);
+진짜 page가 필요하면 별도 채널(Slack/PagerDuty)을 추후 추가. 노이즈 기록은 Actions artifact(30일)라 장기 통계는 없다.
