@@ -67,6 +67,7 @@ before relying on more icons.
 - Polar — 구독 결제
 - Vercel — 배포
 - PostHog — 제품 분석(가입/업로드/분석 전환율 등)
+- oncall 1차 방어선 — PostHog alert 웹훅 → GitHub Actions 헤드리스 에이전트 → GitHub Issues (ADR-018, docs/ONCALL.md)
 
 ## 아키텍처 규칙
 - CRITICAL: Supabase/Claude/Polar 등 외부 서비스 호출은 `src/app/api/` 라우트 핸들러(또는

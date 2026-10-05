@@ -74,6 +74,27 @@ export function decide({ alert, stats, verdict }) {
   return { action: v.verdict === "signal" ? "escalate" : "record", verdict: v, policyNotes };
 }
 
+// 에이전트가 쓴 문자열은 신뢰하지 않는다(alert 문자열에서 프롬프트 인젝션될 수 있음): @멘션 알림,
+// 마크다운 링크, URL(피싱)을 이슈 본문에 그대로 싣지 않는다.
+export function sanitizeAgentText(text) {
+  return String(text)
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1 [링크 제거됨]")
+    .replace(/https?:\/\/\S+/gi, "[링크 제거됨]")
+    .replace(/@(?=[A-Za-z0-9_-])/g, "@\u200b");
+}
+
+// 시크릿 유사 문자열이 남아 있어도 throw하지 않는다 — throw하면 plan.json이 안 쓰여 신호가 이슈 없이
+// 사라진다(fail-closed 위반). 대신 alert 링크만 있는 최소 본문으로 대체해 escalation은 유지한다.
+export function finalizeBody(body, { alert, runUrl }) {
+  if (!containsSecret(body)) return body;
+  return [
+    "> ⚠️ 본문에서 시크릿 유사 문자열이 감지되어 에이전트 서술을 생략했습니다. 수동 확인이 필요합니다.",
+    "",
+    `- PostHog issue id: \`${alert.issueId}\` (${alert.event})`,
+    `- 분석 실행: ${runUrl}`,
+  ].join("\n");
+}
+
 const fmt = (x) => (x === null || x === undefined ? "확인 못 함" : String(x));
 
 function alertFacts(alert, stats) {
@@ -81,7 +102,7 @@ function alertFacts(alert, stats) {
     `- 이벤트: \`${alert.event}\``,
     `- PostHog issue id: \`${alert.issueId}\``,
     alert.timestamp ? `- alert 시각: ${alert.timestamp}` : null,
-    alert.currentBucketValue !== null ? `- 급증: 현재 창 ${alert.currentBucketValue}건 / 기준선 ${fmt(alert.computedBaseline)}` : null,
+    alert.currentBucketValue != null ? `- 급증: 현재 창 ${alert.currentBucketValue}건 / 기준선 ${fmt(alert.computedBaseline)}` : null,
     alert.url ? `- PostHog: ${alert.url}` : null,
     stats?.available
       ? `- 통계: 총 ${stats.totalEvents}건 · ${stats.users}명 · 세션 ${stats.sessions} · 최초 ${fmt(stats.firstSeen)} · 최근 ${fmt(stats.lastSeen)} · 최근 1시간 ${stats.lastHourEvents}건`
@@ -90,8 +111,12 @@ function alertFacts(alert, stats) {
   return lines.filter(Boolean).join("\n");
 }
 
+function cleanVerdict(v) {
+  return Object.fromEntries(Object.entries(v).map(([k, val]) => [k, typeof val === "string" ? sanitizeAgentText(val) : val]));
+}
+
 export function renderIssue({ alert, stats, decision, runUrl }) {
-  const v = decision.verdict;
+  const v = cleanVerdict(decision.verdict);
   const labels = ["oncall", "oncall:signal", `confidence:${v.confidence}`, dedupLabel(alert)];
   if (alert.event === "$error_tracking_issue_spiking") labels.push("oncall:spike");
 
@@ -130,7 +155,7 @@ export function renderIssue({ alert, stats, decision, runUrl }) {
 }
 
 export function renderComment({ alert, stats, decision, runUrl }) {
-  const v = decision.verdict;
+  const v = cleanVerdict(decision.verdict);
   const text = [
     `🔁 같은 issue의 새 alert (\`${alert.event}\`, ${alert.timestamp ?? "시각 불명"}) — 분석 ${runUrl}`,
     `- 확신도: ${v.confidence}${decision.policyNotes.length ? ` · ${decision.policyNotes.join(" / ")}` : ""}`,
@@ -173,10 +198,8 @@ function plan(dir, runUrl) {
 
   if (decision.action === "escalate") {
     const issue = renderIssue({ alert, stats, decision, runUrl });
-    const body = issue.body;
-    if (containsSecret(body)) throw new Error("secret-like content detected in issue body");
-    fs.writeFileSync(path.join(dir, "issue-body.md"), body);
-    fs.writeFileSync(path.join(dir, "issue-comment.md"), renderComment({ alert, stats, decision, runUrl }));
+    fs.writeFileSync(path.join(dir, "issue-body.md"), finalizeBody(issue.body, { alert, runUrl }));
+    fs.writeFileSync(path.join(dir, "issue-comment.md"), finalizeBody(renderComment({ alert, stats, decision, runUrl }), { alert, runUrl }));
     out.title = issue.title;
     out.labels = issue.labels;
   }

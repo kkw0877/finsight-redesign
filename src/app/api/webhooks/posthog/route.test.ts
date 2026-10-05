@@ -114,6 +114,40 @@ describe("POST /api/webhooks/posthog", () => {
     expect(ids[0]).toBe(ids[1]);
   });
 
+  it("event_id·timestamp가 모두 없으면 분 단위 버킷으로 후속 alert를 중복 처리하지 않는다", async () => {
+    vi.useFakeTimers();
+    try {
+      const admin = mockAdmin();
+      const { event_id: _a, timestamp: _b, ...bare } = body;
+      void _a;
+      void _b;
+      vi.setSystemTime(new Date("2026-10-05T00:00:10Z"));
+      await POST(req(bare));
+      vi.setSystemTime(new Date("2026-10-05T00:00:50Z"));
+      await POST(req(bare));
+      vi.setSystemTime(new Date("2026-10-05T00:05:10Z"));
+      await POST(req(bare));
+      const ids = admin.insert.mock.calls.map((c) => c[0].id);
+      expect(ids[0]).toBe(ids[1]);
+      expect(ids[0]).not.toBe(ids[2]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("롤백 delete가 실패하면 그 사실을 로깅한다(조용히 유실 금지)", async () => {
+    const admin = mockAdmin();
+    admin.eqDelete.mockResolvedValue({ error: { code: "XX000" } });
+    vi.mocked(dispatchOncallAlert).mockRejectedValue(new Error("boom"));
+    const res = await POST(req(body));
+    expect(res.status).toBe(502);
+    expect(logServerEvent).toHaveBeenCalledWith(
+      expect.any(String),
+      "ERROR",
+      expect.objectContaining({ stage: "rollback" }),
+    );
+  });
+
   it("dispatch 실패 시 선삽입 row를 지우고 502 — PostHog 재시도가 중복으로 버려지지 않게", async () => {
     const admin = mockAdmin();
     vi.mocked(dispatchOncallAlert).mockRejectedValue(new Error("GitHub 403"));

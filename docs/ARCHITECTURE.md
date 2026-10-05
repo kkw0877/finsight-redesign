@@ -28,6 +28,7 @@ Design 소스에서 재동기화한다. 상세 배경은 `/CLAUDE.md`의 "Tokens
 - **AI**: Anthropic Claude API (거래 내역 추출 + 소비 분석) — [ADR.md](./ADR.md)의 ADR-004/ADR-005
 - **결제**: Polar (구독, 월 ₩9,900) — [ADR.md](./ADR.md)의 ADR-008
 - **제품 분석**: PostHog — [ADR.md](./ADR.md)의 ADR-009
+- **oncall 1차 방어선**: PostHog alert 웹훅 + GitHub Actions 헤드리스 에이전트 + GitHub Issues — [ADR.md](./ADR.md)의 ADR-018 (`src/services/github/`, `scripts/oncall/`, `.github/workflows/oncall-alert-triage.yml`, 설정은 [ONCALL.md](./ONCALL.md))
 
 ## 패턴
 
@@ -108,8 +109,8 @@ analysis_results  (user_id PK, job_id, summary jsonb, category_breakdown jsonb,
                    anomalies jsonb, recommendations jsonb, generated_at)
   user_id가 PK이므로 새 분석 완료 시 upsert로 이전 결과를 덮어씀                       -- ADR-007
 
-webhook_events    (id = Polar event id PK, type, received_at, processed_at)  -- ADR-012
-  결제 웹훅 idempotency 체크용
+webhook_events    (id = 이벤트 id PK — Polar 원본 id 또는 `posthog:<id>` 접두사, type, received_at, processed_at)  -- ADR-012, ADR-018
+  웹훅 idempotency 체크용(Polar 결제 + PostHog oncall alert 공유)
 ```
 
 ## API 인터페이스 (`src/app/api/`)
@@ -123,10 +124,11 @@ webhook_events    (id = Polar event id PK, type, received_at, processed_at)  -- 
 | `/api/subscription/checkout` | POST | 세션(로그인) | Polar 결제 세션 생성, 결제 URL 반환 | F-UXSBGF |
 | `/api/subscription/cancel` | POST | 세션(로그인) | 구독 해지 요청(다음 주기부터 갱신 중단) | F-QVPIEG |
 | `/api/webhooks/polar` | POST | **Polar 웹훅 서명**(세션 없음) | Polar 웹훅 수신 → 서명 검증 → idempotency → 구독 상태 갱신 | ADR-012 |
+| `/api/webhooks/posthog` | POST | **공유 시크릿 Bearer**(세션 없음) | PostHog error tracking alert 수신 → 시크릿 검증 → webhook_events 선삽입(idempotency) → GitHub repository_dispatch(판정은 CI) | ADR-018 |
 | `/auth/callback` | GET | **없음**(OAuth 콜백 자체가 인증 절차) | Supabase Auth 구글 OAuth 콜백 | F-IZGIPZ |
 
-`/api/webhooks/polar`와 `/auth/callback`은 세션 인증 미들웨어 대상이 아니다 — 나중에 "모든
-API는 로그인 필요"로 일괄 미들웨어를 적용할 때 이 두 라우트를 명시적으로 예외 처리해야 한다.
+`/api/webhooks/polar`, `/api/webhooks/posthog`, `/auth/callback`은 세션 인증 미들웨어 대상이 아니다 —
+나중에 "모든 API는 로그인 필요"로 일괄 미들웨어를 적용할 때 이 세 라우트를 명시적으로 예외 처리해야 한다.
 
 결제/분석 시작·성공·실패 같은 시도 단위 이벤트는 별도 DB 로그 테이블을 두지 않고 PostHog로
 기록한다(ADR-009/ADR-012). `subscriptions`/`analysis_jobs`는 항상 최신 상태만 담고, 시도별

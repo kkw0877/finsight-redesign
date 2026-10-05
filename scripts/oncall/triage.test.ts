@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { containsSecret } from "./redact.mjs";
-import { dedupLabel, decide, normalizeVerdict, renderIssue } from "./triage.mjs";
+import { dedupLabel, decide, finalizeBody, normalizeVerdict, renderIssue } from "./triage.mjs";
 
 const alert = {
   event: "$error_tracking_issue_created",
@@ -98,6 +98,33 @@ describe("renderIssue", () => {
     const { body, labels } = renderIssue({ alert: spiking, stats, decision: dd, runUrl: "u" });
     expect(labels).toContain("oncall:spike");
     expect(containsSecret(body)).toBe(false);
+  });
+});
+
+describe("에이전트 서술 무해화 / 안전 본문", () => {
+  it("에이전트가 쓴 @멘션·마크다운 링크·URL은 이슈 본문에서 무력화된다", () => {
+    const evil = { ...signal, what: "@octocat 확인 [여기](https://evil.example/x) https://evil.example/y" };
+    const d = decide({ alert, stats, verdict: normalizeVerdict(evil) });
+    const { body } = renderIssue({ alert, stats, decision: d, runUrl: "u" });
+    expect(body).not.toMatch(/@octocat/);
+    expect(body).not.toContain("evil.example");
+  });
+
+  it("currentBucketValue가 undefined여도 'undefined'가 본문에 나오지 않는다", () => {
+    const { currentBucketValue: _drop, ...partial } = alert;
+    void _drop;
+    const d = decide({ alert: partial, stats, verdict: normalizeVerdict(signal) });
+    const { body } = renderIssue({ alert: partial, stats, decision: d, runUrl: "u" });
+    expect(body).not.toContain("undefined");
+  });
+
+  it("finalizeBody: 시크릿이 남아 있으면 던지지 않고 alert 링크만 있는 최소 본문으로 대체", () => {
+    const raw = "details sk-ant-api03-AbCdEf_123-xyz456789";
+    const out = finalizeBody(raw, { alert, runUrl: "https://x/run/1" });
+    expect(containsSecret(out)).toBe(false);
+    expect(out).toContain("issue-1");
+    expect(out).toContain("https://x/run/1");
+    expect(finalizeBody("clean body", { alert, runUrl: "u" })).toBe("clean body");
   });
 });
 

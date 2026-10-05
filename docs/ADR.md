@@ -334,6 +334,13 @@ spiking·유저 2명 이상·핵심 경로는 노이즈로 낮출 수 없고, �
 네트워크·시크릿·gh 권한이 없고 `verdict.json`만 쓴다. 영향 통계는 결정적 step이 PostHog에서 읽기 전용으로
 가져온다(`scripts/oncall/posthog-stats.mjs`, 실패 시 확신도만 낮춤).
 
+**에이전트 격리**: alert 문자열은 공개 PostHog 토큰으로 누구나 만들 수 있어 프롬프트 인젝션을 전제로 한다.
+신뢰 스크립트는 에이전트 실행 전 `$RUNNER_TEMP`로 복사해 뒤 step이 복사본만 실행하고, 에이전트의 Write는
+`verdict.json` 한 파일로 제한하며, checkout 자격증명은 남기지 않고, `GH_TOKEN`/PostHog 키는 필요한 step에만
+준다. 이슈 본문에 실리는 에이전트 문자열은 @멘션·링크를 무력화하고, 시크릿 유사 문자열이 남으면 던지지 않고
+최소 본문으로 대체해 escalation을 유지한다. (잔여 위험: 에이전트가 프로세스 환경을 읽을 수 있으므로
+`ANTHROPIC_API_KEY` 노출 가능성은 남는다 — 출력은 redact를 거치지만 완전하지 않다.)
+
 **이유**: 새 인프라(큐, 별도 멱등 테이블, 슬랙 앱) 없이 이미 있는 것(Supabase `webhook_events`, GitHub Issues/Actions)만
 쓴다 — ADR 철학. escalation 채널은 레포에 설정된 것이 GitHub Issues뿐이라 이를 택했다.
 

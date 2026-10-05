@@ -33,9 +33,12 @@ function parseAlert(raw: unknown): { eventId: string; alert: OncallAlert } | nul
 
   const timestamp = str(b.timestamp, 40);
   // PostHog 템플릿의 {event.uuid}를 쓰는 게 정석. 없으면 같은 alert는 같은 id가 되도록 해시로 대체한다.
+  // timestamp도 없으면 분 단위 버킷을 섞어, 같은 issue의 후속 alert(특히 반복되는 spiking)가 영구히
+  // 중복으로 버려지지 않게 한다(같은 분 안의 재전송만 멱등 처리).
+  const seed = timestamp ?? new Date().toISOString().slice(0, 16);
   const eventId =
     str(b.event_id, 100) ??
-    createHash("sha256").update(`${event}|${issueId}|${timestamp ?? ""}`).digest("hex").slice(0, 32);
+    createHash("sha256").update(`${event}|${issueId}|${seed}`).digest("hex").slice(0, 32);
 
   return {
     eventId: `posthog:${eventId}`,
@@ -107,7 +110,15 @@ export async function POST(request: NextRequest) {
     await dispatchOncallAlert(eventId, alert);
   } catch (err) {
     // 선삽입 row가 남아 있으면 PostHog 재시도가 중복으로 버려져 alert가 유실된다 — 지우고 5xx로 재시도를 유도.
-    await admin.from("webhook_events").delete().eq("id", eventId);
+    const { error: rollbackError } = await admin.from("webhook_events").delete().eq("id", eventId);
+    if (rollbackError) {
+      // 지우지 못하면 재시도가 duplicate로 끝나 alert가 유실된다 — 최소한 사람이 알 수 있게 남긴다.
+      logServerEvent("posthog alert rollback failed", "ERROR", {
+        event: "posthog_alert_webhook_failed",
+        stage: "rollback",
+        error_type: errorTypeOf(rollbackError),
+      });
+    }
     console.error("oncall dispatch 실패", err);
     logServerEvent("posthog alert dispatch failed", "ERROR", {
       event: "posthog_alert_webhook_failed",
